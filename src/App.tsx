@@ -1,0 +1,1754 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Plus, 
+  TrendingUp, 
+  AlertCircle, 
+  Check,
+  Sparkles,
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  FileText,
+  Download,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Package,
+  Edit,
+  Trash2,
+  Menu,
+  Settings,
+  CreditCard,
+  LogOut
+} from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { INITIAL_ORDERS, TODAY } from './constants';
+import { Order, PaymentInfo } from './types';
+import { formatCurrency, getDaysRemaining, getStatusColor } from './lib/utils';
+import { supabase } from './lib/supabase';
+
+
+export default function App() {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>([]);
+
+  useEffect(() => {
+    // Check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchOrders();
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchOrders();
+      } else {
+        setOrders([]);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('deadline', { ascending: true });
+
+      if (error) throw error;
+
+      if (data) {
+        setOrders(data.map(o => ({
+          ...o,
+          deadline: o.deadline ? new Date(o.deadline) : null
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'received' | 'pending' | 'urgent' | 'completed'>('all');
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [currentMonthIndex, setCurrentMonthIndex] = useState(0); // 0: April, 1: May, 2: June
+  const [isAddingOrder, setIsAddingOrder] = useState(false);
+  const [isDayDetailsOpen, setIsDayDetailsOpen] = useState(false);
+  const [isFinanceDetailsOpen, setIsFinanceDetailsOpen] = useState(false);
+  const [financeDetailType, setFinanceDetailType] = useState<'received' | 'pending'>('received');
+  const [reportMonth, setReportMonth] = useState<number>(TODAY.getMonth());
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+
+  const months = useMemo(() => {
+    const currentMonth = TODAY.getMonth();
+    const currentYear = TODAY.getFullYear();
+    return [
+      { month: currentMonth, year: currentYear },
+      { month: (currentMonth + 1) % 12, year: currentMonth + 1 > 11 ? currentYear + 1 : currentYear },
+      { month: (currentMonth + 2) % 12, year: currentMonth + 2 > 11 ? currentYear + 1 : currentYear },
+    ];
+  }, []);
+
+  // Derived Stats
+  const stats = useMemo(() => {
+    const activeOrders = orders.filter(o => !o.completed && !o.isPartnership);
+    const urgentCount = activeOrders.filter(o => {
+      const days = getDaysRemaining(o.deadline);
+      return days !== null && days <= 3;
+    }).length;
+
+    let totalReceived = 0;
+    let totalPending = 0;
+    let receivedCount = 0;
+    let pendingCount = 0;
+
+    const monthlyTotals: Record<number, { total: number; received: number }> = {
+      3: { total: 0, received: 0 },
+      4: { total: 0, received: 0 },
+      5: { total: 0, received: 0 },
+    };
+
+    const receivedPayments: any[] = [];
+    const pendingPayments: any[] = [];
+
+    orders.forEach(o => {
+      if (o.isPartnership) return;
+      const value = parseFloat(o.payment.totalValue.replace(',', '.')) || 0;
+      const month = o.deadline ? o.deadline.getMonth() : null;
+
+      if (month !== null && monthlyTotals[month]) {
+        monthlyTotals[month].total += value;
+      }
+
+      if (o.payment.type === 'pix') {
+        const half = value * 0.5;
+        if (o.payment.pixEntryPaid) {
+          totalReceived += half;
+          receivedCount++;
+          receivedPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: half, label: 'Entrada 50%', type: 'pix' });
+          if (month !== null && monthlyTotals[month]) monthlyTotals[month].received += half;
+        } else if (value > 0) {
+          totalPending += half;
+          pendingCount++;
+          pendingPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: half, label: 'Entrada 50%', type: 'pix' });
+        }
+        
+        if (o.payment.pixRemainingPaid) {
+          totalReceived += half;
+          receivedCount++;
+          receivedPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: half, label: 'Restante 50%', type: 'pix' });
+          if (month !== null && monthlyTotals[month]) monthlyTotals[month].received += half;
+        } else if (value > 0) {
+          totalPending += half;
+          pendingCount++;
+          pendingPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: half, label: 'Restante 50%', type: 'pix' });
+        }
+      } else if (o.payment.type === 'card') {
+        if (o.payment.cardPaid) {
+          totalReceived += value;
+          receivedCount++;
+          receivedPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: value, label: 'Total Cartão', type: 'card' });
+          if (month !== null && monthlyTotals[month]) monthlyTotals[month].received += value;
+        } else if (value > 0) {
+          totalPending += value;
+          pendingCount++;
+          pendingPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: value, label: 'Total Cartão', type: 'card' });
+        }
+      } else if (value > 0) {
+        totalPending += value;
+        pendingCount++;
+        pendingPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: value, label: 'A definir', type: 'none' });
+      }
+    });
+
+    return {
+      urgentCount,
+      totalOrders: orders.filter(o => !o.isPartnership).length,
+      completedCount: orders.filter(o => o.completed).length,
+      totalReceived,
+      totalPending,
+      receivedCount,
+      pendingCount,
+      monthlyTotals,
+      receivedPayments,
+      pendingPayments
+    };
+  }, [orders]);
+
+  const filteredOrders = useMemo(() => {
+    let result = [...orders];
+
+    if (selectedDate) {
+      result = result.filter(o => o.deadline && o.deadline.toDateString() === selectedDate.toDateString());
+    } else {
+      if (activeFilter === 'received') {
+        result = result.filter(o => 
+          (o.payment.type === 'pix' && (o.payment.pixEntryPaid || o.payment.pixRemainingPaid)) ||
+          (o.payment.type === 'card' && o.payment.cardPaid)
+        );
+      } else if (activeFilter === 'pending') {
+        result = result.filter(o => {
+          const value = parseFloat(o.payment.totalValue.replace(',', '.')) || 0;
+          if (value === 0) return false;
+          if (o.payment.type === 'pix') return !o.payment.pixEntryPaid || !o.payment.pixRemainingPaid;
+          if (o.payment.type === 'card') return !o.payment.cardPaid;
+          return true; // No type set but has value
+        });
+      } else if (activeFilter === 'urgent') {
+        result = result.filter(o => {
+          if (o.completed || o.isPartnership) return false;
+          const days = getDaysRemaining(o.deadline);
+          return days !== null && days <= 3;
+        });
+      } else if (activeFilter === 'completed') {
+        result = result.filter(o => o.completed);
+      }
+    }
+
+    return result.sort((a, b) => {
+      if (a.completed && !b.completed) return 1;
+      if (!a.completed && b.completed) return -1;
+      if (a.isPartnership && !b.isPartnership) return 1;
+      if (!a.isPartnership && b.isPartnership) return -1;
+      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline) return 1;
+      if (!b.deadline) return -1;
+      return a.deadline.getTime() - b.deadline.getTime();
+    });
+  }, [orders, activeFilter]);
+
+  const updateOrderPayment = async (id: string, updates: Partial<PaymentInfo>) => {
+    const order = orders.find(o => o.id === id);
+    if (!order) return;
+    
+    const newPayment = { ...order.payment, ...updates };
+    const { error } = await supabase
+      .from('orders')
+      .update({ payment: newPayment })
+      .eq('id', id);
+      
+    if (!error) {
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, payment: newPayment } : o));
+    }
+  };
+
+  const toggleOrderCompletion = async (id: string) => {
+    const order = orders.find(o => o.id === id);
+    if (!order) return;
+    
+    const newCompleted = !order.completed;
+    const { error } = await supabase
+      .from('orders')
+      .update({ completed: newCompleted })
+      .eq('id', id);
+      
+    if (!error) {
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, completed: newCompleted } : o));
+    }
+  };
+
+  const addNewOrder = async (newOrder: Omit<Order, 'id' | 'completed'>) => {
+    if (!user) return;
+    
+    const { data, error } = await supabase
+      .from('orders')
+      .insert([{
+        customer_name: newOrder.customerName,
+        piece_description: newOrder.pieceDescription,
+        notes: newOrder.notes,
+        deadline: newOrder.deadline?.toISOString(),
+        is_partnership: newOrder.isPartnership,
+        payment: newOrder.payment,
+        user_id: user.id,
+        completed: false
+      }])
+      .select()
+      .single();
+      
+    if (!error && data) {
+      const mapped: Order = {
+        id: data.id,
+        customerName: data.customer_name,
+        pieceDescription: data.piece_description,
+        notes: data.notes,
+        deadline: data.deadline ? new Date(data.deadline) : null,
+        isPartnership: data.is_partnership,
+        completed: data.completed,
+        payment: data.payment
+      };
+      setOrders(prev => [...prev, mapped]);
+      setIsAddingOrder(false);
+    } else if (error) {
+      console.error('Error adding order:', error);
+    }
+  };
+
+  const updateOrder = async (id: string, updatedOrder: Omit<Order, 'id' | 'completed'>) => {
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        customer_name: updatedOrder.customerName,
+        piece_description: updatedOrder.pieceDescription,
+        notes: updatedOrder.notes,
+        deadline: updatedOrder.deadline?.toISOString(),
+        is_partnership: updatedOrder.isPartnership,
+        payment: updatedOrder.payment
+      })
+      .eq('id', id);
+      
+    if (!error) {
+      setOrders(prev => prev.map(o => o.id === id ? { ...updatedOrder, id, completed: o.completed } : o));
+      setEditingOrder(null);
+    } else {
+      console.error('Error updating order:', error);
+    }
+  };
+
+  const deleteOrder = (id: string) => {
+    setDeletingOrderId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (deletingOrderId) {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', deletingOrderId);
+        
+      if (!error) {
+        setOrders(prev => prev.filter(o => o.id !== deletingOrderId));
+        setDeletingOrderId(null);
+      } else {
+        console.error('Error deleting order:', error);
+      }
+    }
+  };
+
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(TODAY.getFullYear(), reportMonth));
+    
+    // Header
+    doc.setFillColor(74, 55, 40); // Marrom Profundo
+    doc.rect(0, 0, 210, 50, 'F');
+    
+    // Draw Logo in PDF (Centered)
+    const logoSize = 22;
+    const s = logoSize / 100;
+    const logoY = 6;
+    
+    doc.setDrawColor(217, 197, 178); // Rosa/Bege color for logo lines
+    doc.setLineWidth(0.4);
+    doc.circle(105, logoY + 50 * s, 45 * s, 'S');
+    doc.setLineWidth(0.15);
+    doc.circle(105, logoY + 50 * s, 41 * s, 'S');
+    doc.setLineWidth(0.4);
+    doc.line(105 - 15 * s, logoY + 65 * s, 105 + 15 * s, logoY + 35 * s);
+    doc.setFillColor(217, 197, 178);
+    doc.circle(105 + 13 * s, logoY + 37 * s, 1 * s, 'F');
+    doc.roundedRect(105 - 8 * s, logoY + 2 * s, 16 * s, 6 * s, 1 * s, 1 * s, 'S');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(30);
+    doc.text('bastidor', 105, 34, { align: 'center' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(217, 197, 178);
+    doc.text('seu ateliê organizado e leve', 105, 40, { align: 'center' });
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.text(`Relatório Financeiro • ${monthName} ${TODAY.getFullYear()}`, 105, 46, { align: 'center' });
+    
+    // Summary Section
+    const monthStats = stats.monthlyTotals[reportMonth] || { total: 0, received: 0 };
+    const pending = monthStats.total - monthStats.received;
+    
+    doc.setTextColor(74, 55, 40);
+    doc.setFontSize(14);
+    doc.text('Resumo do Mês', 14, 60);
+    
+    autoTable(doc, {
+      startY: 65,
+      head: [['Descrição', 'Valor']],
+      body: [
+        ['Total em Encomendas', formatCurrency(monthStats.total)],
+        ['Total Recebido', formatCurrency(monthStats.received)],
+        ['Total a Receber', formatCurrency(pending)],
+      ],
+      headStyles: { fillColor: [74, 55, 40] },
+      margin: { left: 14, right: 14 },
+    });
+    
+    // Detailed Transactions
+    doc.setFontSize(16);
+    doc.text('Detalhamento de Recebidos', 14, (doc as any).lastAutoTable.finalY + 15);
+    
+    const monthOrders = orders.filter(o => o.deadline && o.deadline.getMonth() === reportMonth && !o.isPartnership);
+    const tableData: any[] = [];
+    
+    monthOrders.forEach(o => {
+      const value = parseFloat(o.payment.totalValue.replace(',', '.')) || 0;
+      if (o.payment.type === 'pix') {
+        const half = value * 0.5;
+        if (o.payment.pixEntryPaid) tableData.push([o.customerName, o.pieceDescription, 'PIX (Entrada)', formatCurrency(half)]);
+        if (o.payment.pixRemainingPaid) tableData.push([o.customerName, o.pieceDescription, 'PIX (Restante)', formatCurrency(half)]);
+      } else if (o.payment.type === 'card' && o.payment.cardPaid) {
+        tableData.push([o.customerName, o.pieceDescription, 'Cartão', formatCurrency(value)]);
+      }
+    });
+    
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 20,
+      head: [['Cliente', 'Peça', 'Tipo', 'Valor']],
+      body: tableData,
+      headStyles: { fillColor: [74, 55, 40] },
+      margin: { left: 14, right: 14 },
+    });
+    
+    // Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(10);
+      doc.setTextColor(150);
+      doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} - Página ${i} de ${pageCount}`, 105, 285, { align: 'center' });
+    }
+    
+    doc.save(`Relatorio_Bastidor_${monthName}_2026.pdf`);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-creme flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-vinho"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LandingPage onEnter={async (name, email, password, isRegistering) => {
+      try {
+        if (isRegistering) {
+          const { error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: { full_name: name }
+            }
+          });
+          if (error) throw error;
+          alert('Cadastro realizado! Por favor, entre com suas credenciais.');
+        } else {
+          const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+          if (error) throw error;
+        }
+      } catch (err: any) {
+        alert(err.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos' : err.message);
+      }
+    }} />;
+  }
+
+  return (
+    <div className="min-h-screen pb-20">
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-vinho/60 backdrop-blur-sm z-[100]"
+            />
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed top-0 left-0 bottom-0 w-72 bg-creme z-[101] shadow-2xl border-r-2 border-rosa flex flex-col"
+            >
+              <div className="p-8 bg-vinho text-creme">
+                <div className="flex items-center gap-3">
+                  <div className="bg-rosa p-2 rounded-xl">
+                    <HoopLogo className="w-8 h-8 text-vinho" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-serif font-black lowercase tracking-tighter">bastidor</h3>
+                    <p className="text-[10px] text-rosa uppercase font-bold tracking-widest">menu ateliê</p>
+                  </div>
+                </div>
+              </div>
+
+              <nav className="flex-1 p-4 space-y-2 mt-4">
+                <button 
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
+                >
+                  <CreditCard className="w-5 h-5" />
+                  <span>Minha Assinatura</span>
+                </button>
+                <button 
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
+                >
+                  <Settings className="w-5 h-5" />
+                  <span>Configurações</span>
+                </button>
+              </nav>
+
+              <div className="p-4 border-t border-rosa/30">
+                <button 
+                  onClick={() => {
+                    setIsSidebarOpen(false);
+                    supabase.auth.signOut();
+                  }}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-vermelho hover:bg-vermelho/5 transition-all font-black"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span>Sair da Conta</span>
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <header className="bg-vinho text-creme px-6 py-6 md:py-10 text-center relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+          <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] border-[40px] border-rosa rounded-full rotate-45" />
+        </div>
+        
+        {/* Menu Toggle */}
+        <button 
+          onClick={() => setIsSidebarOpen(true)}
+          className="absolute left-4 top-1/2 -translate-y-1/2 md:top-6 md:translate-y-0 p-3 bg-white/10 rounded-2xl text-rosa hover:bg-white/20 transition-all z-20"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative z-10 flex flex-col items-center"
+        >
+          <div className="text-rosa mb-2 md:mb-4">
+            <HoopLogo className="w-12 h-12 md:w-16 md:h-16" />
+          </div>
+          <h1 className="text-3xl md:text-4xl font-serif font-black mb-1 lowercase tracking-tighter">bastidor</h1>
+          <p className="text-[10px] text-rosa tracking-[3px] uppercase font-bold">seu ateliê organizado • olá, {user?.user_metadata?.full_name || user?.email?.split('@')[0]}</p>
+        </motion.div>
+      </header>
+
+      <div className="bg-dourado text-white text-center py-2 text-xs font-medium tracking-wider">
+        hoje: {TODAY.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+      </div>
+
+      <main className="max-w-2xl mx-auto px-4 mt-6 space-y-8">
+        {/* Finance Section */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 border-b border-rosa pb-2">
+            <TrendingUp className="w-5 h-5 text-vinho" />
+            <h2 className="text-xl font-serif text-vinho">Resumo Financeiro</h2>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <motion.button 
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                setFinanceDetailType('received');
+                setIsFinanceDetailsOpen(true);
+              }}
+              className={`p-4 rounded-2xl shadow-lg text-left transition-all ${activeFilter === 'received' ? 'ring-4 ring-dourado bg-vinho text-white' : 'bg-vinho text-white'}`}
+            >
+              <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider opacity-70 mb-1">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Já recebi</span>
+              </div>
+              <div className="text-2xl font-serif font-black">{formatCurrency(stats.totalReceived)}</div>
+              <div className="text-[10px] opacity-60 mt-1">{stats.receivedCount} pagamentos</div>
+            </motion.button>
+            
+            <motion.button 
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                setFinanceDetailType('pending');
+                setIsFinanceDetailsOpen(true);
+              }}
+              className={`p-4 rounded-2xl shadow-sm text-left border-2 transition-all ${activeFilter === 'pending' ? 'ring-4 ring-vinho bg-white border-rosa' : 'bg-white border-rosa'}`}
+            >
+              <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-cinza mb-1">
+                <Clock className="w-3 h-3" />
+                <span>A receber</span>
+              </div>
+              <div className="text-2xl font-serif font-black text-vinho">{formatCurrency(stats.totalPending)}</div>
+              <div className="text-[10px] text-cinza opacity-60 mt-1">{stats.pendingCount} pendentes</div>
+            </motion.button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { name: 'Abril', month: 3 },
+              { name: 'Maio', month: 4 },
+              { name: 'Junho', month: 5 }
+            ].map(m => (
+              <div key={m.month} className="bg-white p-3 rounded-xl text-center shadow-sm border border-creme">
+                <div className="text-[10px] text-cinza uppercase tracking-wider">{m.name}</div>
+                <div className="text-sm font-bold text-vinho mt-1">{formatCurrency(stats.monthlyTotals[m.month].total)}</div>
+                {stats.monthlyTotals[m.month].received > 0 && (
+                  <div className="text-[9px] text-verde mt-1 font-medium">
+                    ✓ {formatCurrency(stats.monthlyTotals[m.month].received)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Stats Section */}
+        <section className="grid grid-cols-3 gap-3">
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              setActiveFilter(activeFilter === 'urgent' ? 'all' : 'urgent');
+              setTimeout(() => document.getElementById('orders-list')?.scrollIntoView({ behavior: 'smooth' }), 100);
+            }}
+            className={`p-4 rounded-xl text-center shadow-sm border transition-all ${activeFilter === 'urgent' ? 'ring-4 ring-vermelho bg-white border-creme' : 'bg-white border-creme'}`}
+          >
+            <div className="text-2xl font-serif font-black text-vermelho">{stats.urgentCount}</div>
+            <div className="flex items-center justify-center gap-1 text-[10px] text-cinza mt-1">
+              <AlertTriangle className="w-3 h-3 text-vermelho" />
+              <span>Urgente</span>
+            </div>
+          </motion.button>
+          
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              setActiveFilter('all');
+              setTimeout(() => document.getElementById('orders-list')?.scrollIntoView({ behavior: 'smooth' }), 100);
+            }}
+            className={`p-4 rounded-xl text-center shadow-sm border transition-all ${activeFilter === 'all' ? 'ring-4 ring-vinho bg-white border-creme' : 'bg-white border-creme'}`}
+          >
+            <div className="text-2xl font-serif font-black text-vinho">{stats.totalOrders}</div>
+            <div className="flex items-center justify-center gap-1 text-[10px] text-cinza mt-1">
+              <Package className="w-3 h-3 text-vinho" />
+              <span>Total pedidos</span>
+            </div>
+          </motion.button>
+          
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              setActiveFilter(activeFilter === 'completed' ? 'all' : 'completed');
+              setTimeout(() => document.getElementById('orders-list')?.scrollIntoView({ behavior: 'smooth' }), 100);
+            }}
+            className={`p-4 rounded-xl text-center shadow-sm border transition-all ${activeFilter === 'completed' ? 'ring-4 ring-verde bg-white border-creme' : 'bg-white border-creme'}`}
+          >
+            <div className="text-2xl font-serif font-black text-verde">{stats.completedCount}</div>
+            <div className="flex items-center justify-center gap-1 text-[10px] text-cinza mt-1">
+              <CheckCircle2 className="w-3 h-3 text-verde" />
+              <span>Concluídos</span>
+            </div>
+          </motion.button>
+        </section>
+
+        {/* Report Section */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 border-b border-rosa pb-2">
+            <FileText className="w-5 h-5 text-vinho" />
+            <h2 className="text-xl font-serif text-vinho">Relatórios Mensais</h2>
+          </div>
+          
+          <div className="bg-white p-6 rounded-[32px] border-2 border-rosa shadow-sm flex flex-col sm:flex-row items-center gap-6">
+            <div className="flex-1 w-full">
+              <label className="block text-[10px] font-bold text-cinza uppercase mb-2">Selecione o Mês</label>
+              <div className="flex gap-2">
+                {[
+                  { name: 'Abril', val: 3 },
+                  { name: 'Maio', val: 4 },
+                  { name: 'Junho', val: 5 }
+                ].map(m => (
+                  <button
+                    key={m.val}
+                    onClick={() => setReportMonth(m.val)}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all border-2 ${
+                      reportMonth === m.val 
+                      ? 'bg-vinho border-vinho text-creme' 
+                      : 'bg-white border-rosa text-vinho hover:bg-rosa/10'
+                    }`}
+                  >
+                    {m.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={generatePDF}
+              className="w-full sm:w-auto bg-dourado text-white px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-3 shadow-lg hover:bg-opacity-90 transition-all"
+            >
+              <Download className="w-5 h-5" />
+              GERAR PDF
+            </motion.button>
+          </div>
+        </section>
+
+        {/* Calendar Section */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between border-b border-rosa pb-2">
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="w-5 h-5 text-vinho" />
+              <h2 className="text-xl font-serif text-vinho">Calendário de Prazos</h2>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                disabled={currentMonthIndex === 0}
+                onClick={() => setCurrentMonthIndex(prev => prev - 1)}
+                className="p-1 rounded-full hover:bg-creme disabled:opacity-30 text-vinho"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button 
+                disabled={currentMonthIndex === months.length - 1}
+                onClick={() => setCurrentMonthIndex(prev => prev + 1)}
+                className="p-1 rounded-full hover:bg-creme disabled:opacity-30 text-vinho"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+          
+          <div className="relative overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentMonthIndex}
+                initial={{ x: 50, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -50, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Calendar 
+                  month={months[currentMonthIndex].month} 
+                  year={months[currentMonthIndex].year} 
+                  orders={orders} 
+                  selectedDate={selectedDate}
+                  onDateClick={(date) => {
+                    const dayOrders = orders.filter(o => o.deadline && o.deadline.toDateString() === date.toDateString());
+                    if (dayOrders.length > 0) {
+                      setSelectedDate(date);
+                      setIsDayDetailsOpen(true);
+                    }
+                  }}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          <div className="flex flex-wrap gap-4 px-2">
+            <div className="flex items-center gap-2 text-[10px] text-cinza">
+              <div className="w-2 h-2 rounded-full bg-vermelho" /> Urgente
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-cinza">
+              <div className="w-2 h-2 rounded-full bg-amarelo" /> Próximo
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-cinza">
+              <div className="w-2 h-2 rounded-full bg-verde" /> Folgado
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-cinza">
+              <div className="w-2 h-2 rounded-full bg-cinza" /> Parceria
+            </div>
+          </div>
+        </section>
+
+        {/* Urgent Alerts */}
+        <AnimatePresence>
+          {stats.urgentCount > 0 && (
+            <motion.section 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-[#fff5f5] border-2 border-vermelho rounded-2xl overflow-hidden"
+            >
+              <div className="bg-vermelho text-white px-4 py-2 text-xs font-bold tracking-widest uppercase flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                Atenção Imediata
+              </div>
+              <div className="divide-y divide-[#fce4e4]">
+                {orders.filter(o => !o.completed && !o.isPartnership && getDaysRemaining(o.deadline) !== null && (getDaysRemaining(o.deadline) || 0) <= 3).map(o => {
+                  const days = getDaysRemaining(o.deadline);
+                  return (
+                    <div key={o.id} className="p-4 flex justify-between items-center group">
+                      <div className="flex-1">
+                        <div className="font-semibold text-sm">{o.customerName}</div>
+                        <div className="text-xs text-cinza">{o.pieceDescription}</div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => setEditingOrder(o)}
+                            className="p-1.5 text-cinza hover:text-vinho hover:bg-creme rounded-lg transition-all"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={() => deleteOrder(o.id)}
+                            className="p-1.5 text-cinza hover:text-vermelho hover:bg-vermelho/10 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="bg-vermelho text-white text-[10px] px-2 py-1 rounded-full font-bold">
+                          {days === 0 ? 'HOJE!' : days! < 0 ? `${Math.abs(days!)}d atrasado` : `${days}d`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {/* Orders List */}
+        <section id="orders-list" className="space-y-4">
+          <div className="flex items-center justify-between border-b border-rosa pb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-vinho" />
+              <h2 className="text-xl font-serif text-vinho">Ordem de Bordado</h2>
+            </div>
+            <button 
+              onClick={() => setIsAddingOrder(true)}
+              className="bg-vinho text-creme px-4 py-2 rounded-xl hover:bg-opacity-90 transition-all flex items-center gap-2 text-xs font-bold shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Cadastrar Pedido</span>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {(activeFilter !== 'all' || selectedDate) && (
+              <div className="flex items-center justify-between bg-creme/30 p-2 rounded-lg border border-rosa/30">
+                <span className="text-xs font-medium text-vinho">
+                  {selectedDate ? (
+                    <>Pedidos para: <span className="font-bold uppercase">{selectedDate.toLocaleDateString('pt-BR')}</span></>
+                  ) : (
+                    <>Filtrando por: <span className="font-bold uppercase">{
+                      activeFilter === 'received' ? 'Já recebi' :
+                      activeFilter === 'pending' ? 'A receber' :
+                      activeFilter === 'urgent' ? 'Urgente' :
+                      activeFilter === 'completed' ? 'Concluídos' : ''
+                    }</span></>
+                  )}
+                </span>
+                <button 
+                  onClick={() => {
+                    setActiveFilter('all');
+                    setSelectedDate(null);
+                  }}
+                  className="text-[10px] font-bold text-vinho hover:underline"
+                >
+                  Limpar filtro
+                </button>
+              </div>
+            )}
+            {filteredOrders.length > 0 ? (
+              filteredOrders.map((order, index) => (
+                <OrderCard 
+                  key={order.id} 
+                  order={order} 
+                  index={order.isPartnership ? '✦' : index + 1}
+                  onUpdatePayment={(updates) => updateOrderPayment(order.id, updates)}
+                  onToggleComplete={() => toggleOrderCompletion(order.id)}
+                  onEdit={() => setEditingOrder(order)}
+                  onDelete={() => deleteOrder(order.id)}
+                />
+              ))
+            ) : (
+              <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-rosa/30">
+                <p className="text-cinza text-sm italic">Nenhum pedido encontrado para este filtro.</p>
+              </div>
+            )}
+          </div>
+        </section>
+      </main>
+
+      <AnimatePresence>
+        {isAddingOrder && (
+          <AddOrderModal 
+            onClose={() => setIsAddingOrder(false)} 
+            onAdd={addNewOrder} 
+          />
+        )}
+        {editingOrder && (
+          <AddOrderModal 
+            orderToEdit={editingOrder}
+            onClose={() => setEditingOrder(null)} 
+            onAdd={(updated) => updateOrder(editingOrder.id, updated)} 
+          />
+        )}
+        {isDayDetailsOpen && selectedDate && (
+          <DayDetailsModal 
+            date={selectedDate}
+            orders={orders.filter(o => o.deadline && o.deadline.toDateString() === selectedDate.toDateString())}
+            onClose={() => {
+              setIsDayDetailsOpen(false);
+              setSelectedDate(null);
+            }}
+            onEdit={(order) => {
+              setEditingOrder(order);
+              setIsDayDetailsOpen(false);
+            }}
+            onDelete={(id) => {
+              deleteOrder(id);
+              setIsDayDetailsOpen(false);
+            }}
+          />
+        )}
+        {isFinanceDetailsOpen && (
+          <FinanceDetailsModal 
+            type={financeDetailType}
+            payments={financeDetailType === 'received' ? stats.receivedPayments : stats.pendingPayments}
+            total={financeDetailType === 'received' ? stats.totalReceived : stats.totalPending}
+            onClose={() => setIsFinanceDetailsOpen(false)}
+            onFilter={(type) => {
+              setActiveFilter(type);
+              setIsFinanceDetailsOpen(false);
+            }}
+          />
+        )}
+        {deletingOrderId && (
+          <DeleteConfirmationModal 
+            onClose={() => setDeletingOrderId(null)}
+            onConfirm={confirmDelete}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function FinanceDetailsModal({ 
+  type, 
+  payments, 
+  total, 
+  onClose,
+  onFilter 
+}: { 
+  type: 'received' | 'pending'; 
+  payments: any[]; 
+  total: number; 
+  onClose: () => void;
+  onFilter: (type: 'received' | 'pending') => void;
+}) {
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-vinho/60 backdrop-blur-md z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        className="bg-creme max-w-lg w-full rounded-[32px] overflow-hidden shadow-2xl border-2 border-rosa"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className={`p-6 text-white flex justify-between items-center ${type === 'received' ? 'bg-verde' : 'bg-vinho'}`}>
+          <div>
+            <h3 className="text-2xl font-serif font-black">
+              {type === 'received' ? 'Pagamentos Recebidos' : 'Valores Pendentes'}
+            </h3>
+            <p className="text-white/80 text-xs uppercase tracking-widest mt-1">
+              Total: {formatCurrency(total)}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-all">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3 custom-scrollbar">
+          {payments.length > 0 ? (
+            payments.map((p, i) => (
+              <div key={i} className="bg-white rounded-2xl p-4 border border-rosa/20 shadow-sm flex justify-between items-center">
+                <div className="min-w-0">
+                  <div className="font-bold text-vinho truncate">{p.customerName}</div>
+                  <div className="text-[10px] text-cinza uppercase font-bold truncate">{p.piece}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[9px] font-black text-vinho/40 bg-creme px-1.5 py-0.5 rounded uppercase">
+                      {p.label}
+                    </span>
+                    <span className="text-[9px] font-black text-vinho/40 bg-creme px-1.5 py-0.5 rounded uppercase">
+                      {p.type === 'pix' ? 'PIX' : p.type === 'card' ? 'Cartão' : '---'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right ml-4">
+                  <div className="text-lg font-black text-vinho">{formatCurrency(p.amount)}</div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-12 text-cinza italic">
+              Nenhum pagamento registrado.
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 bg-creme border-t border-rosa/20 flex gap-3">
+          <button 
+            onClick={() => onFilter(type)}
+            className="flex-1 bg-vinho text-creme py-4 rounded-2xl font-black text-sm hover:bg-opacity-90 transition-all shadow-lg"
+          >
+            Ver na Lista
+          </button>
+          <button 
+            onClick={onClose}
+            className="flex-1 bg-white border-2 border-rosa text-vinho py-4 rounded-2xl font-black text-sm hover:bg-rosa/10 transition-all"
+          >
+            Fechar
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function DayDetailsModal({ 
+  date, 
+  orders, 
+  onClose,
+  onEdit,
+  onDelete
+}: { 
+  date: Date; 
+  orders: Order[]; 
+  onClose: () => void;
+  onEdit: (order: Order) => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-vinho/60 backdrop-blur-md z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        className="bg-creme max-w-lg w-full rounded-[32px] overflow-hidden shadow-2xl border-2 border-rosa"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="bg-vinho p-6 text-creme flex justify-between items-center">
+          <div>
+            <h3 className="text-2xl font-serif font-black">Pedidos do Dia</h3>
+            <p className="text-rosa text-xs uppercase tracking-widest mt-1">
+              {date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-all">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4 custom-scrollbar">
+          {orders.map(order => (
+            <div key={order.id} className="bg-white rounded-2xl p-5 border border-rosa/30 shadow-sm">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h4 className="text-xl font-serif font-black text-vinho">{order.customerName}</h4>
+                  <p className="text-sm font-bold text-dourado uppercase tracking-tight">{order.pieceDescription}</p>
+                </div>
+                <div className="text-right">
+                  <div className="flex gap-2 mb-1 justify-end">
+                    <button 
+                      onClick={() => onEdit(order)}
+                      className="p-1.5 text-cinza hover:text-vinho hover:bg-creme rounded-lg transition-all"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button 
+                      onClick={() => onDelete(order.id)}
+                      className="p-1.5 text-cinza hover:text-vermelho hover:bg-vermelho/10 rounded-lg transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="text-lg font-black text-vinho">{formatCurrency(parseFloat(order.payment.totalValue.replace(',', '.')) || 0)}</div>
+                  <div className="text-[10px] font-bold text-cinza uppercase">
+                    {order.payment.type ? (order.payment.type === 'pix' ? 'PIX' : 'Cartão') : 'A definir'}
+                  </div>
+                </div>
+              </div>
+
+              {order.notes && (
+                <div className="bg-fundo/50 p-3 rounded-xl border-l-4 border-rosa italic text-sm text-vinho/80 mb-3">
+                  "{order.notes}"
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${order.completed ? 'bg-verde' : 'bg-amarelo'}`} />
+                <span className="text-[10px] font-bold text-cinza uppercase">
+                  {order.completed ? 'Concluído' : 'Em produção'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-6 bg-creme border-t border-rosa/20">
+          <button 
+            onClick={onClose}
+            className="w-full bg-vinho text-creme py-4 rounded-2xl font-black text-lg hover:bg-opacity-90 transition-all shadow-lg"
+          >
+            Entendido
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function HoopLogo({ className = "w-24 h-24" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="50" cy="50" r="41" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2 2" />
+      <line x1="35" y1="65" x2="65" y2="35" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="63" cy="37" r="1" fill="currentColor" />
+      <path 
+        d="M63 37 C 75 25, 85 45, 65 55 C 45 65, 35 45, 50 35" 
+        stroke="currentColor" 
+        strokeWidth="0.8" 
+        strokeLinecap="round" 
+        fill="none"
+        className="opacity-40"
+      />
+      <rect x="42" y="2" width="16" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function LandingPage({ onEnter }: { onEnter: (name: string, email: string, password?: string, isRegistering?: boolean) => void }) {
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if ((isRegistering ? name : true) && email && password) {
+      onEnter(name, email, password, isRegistering);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-creme flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      {/* Decorative background elements */}
+      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 border-[20px] border-rosa/20 rounded-full" />
+      <div className="absolute bottom-[-5%] left-[-5%] w-48 h-48 border-[15px] border-vinho/5 rounded-full" />
+      
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md text-center z-10"
+      >
+        <div className="flex flex-col items-center mb-8">
+          <motion.div
+            initial={{ scale: 0.8, rotate: -10 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="text-vinho mb-4"
+          >
+            <HoopLogo className="w-32 h-32" />
+          </motion.div>
+          <h1 className="text-5xl font-serif font-black text-vinho tracking-tighter mb-2">bastidor</h1>
+          <p className="text-cinza text-sm font-medium tracking-wide max-w-[250px] mx-auto leading-relaxed">
+            seu ateliê de bordados organizado e leve
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="bg-white p-8 rounded-[40px] shadow-2xl border border-rosa/30 space-y-5">
+          <AnimatePresence mode="wait">
+            {isRegistering && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="text-left overflow-hidden"
+              >
+                <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">Nome Completo</label>
+                <input 
+                  required={isRegistering}
+                  type="text" 
+                  className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Como quer ser chamada?"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="text-left">
+            <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">E-mail</label>
+            <input 
+              required
+              type="email" 
+              className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+            />
+          </div>
+
+          <div className="text-left">
+            <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">Senha</label>
+            <div className="relative">
+              <input 
+                required
+                type={showPassword ? "text" : "password"} 
+                className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 pr-12 text-sm outline-none focus:border-vinho transition-all"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <button 
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-cinza hover:text-vinho transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
+          <button 
+            type="submit"
+            className="w-full bg-vinho text-creme py-5 rounded-2xl font-black text-lg hover:bg-opacity-90 transition-all shadow-xl mt-4 active:scale-95"
+          >
+            {isRegistering ? 'criar minha conta' : 'entrar no ateliê'}
+          </button>
+
+          <div className="pt-2">
+            <button 
+              type="button"
+              onClick={() => setIsRegistering(!isRegistering)}
+              className="text-xs font-bold text-cinza hover:text-vinho transition-colors uppercase tracking-widest"
+            >
+              {isRegistering ? 'já tenho uma conta' : 'ainda não tenho conta? cadastrar'}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-12 text-[10px] text-cinza font-bold uppercase tracking-[4px] opacity-40">
+          ✦ feito com amor para bordadeiras ✦
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function AddOrderModal({ 
+  onClose, 
+  onAdd, 
+  orderToEdit 
+}: { 
+  onClose: () => void; 
+  onAdd: (order: Omit<Order, 'id' | 'completed'>) => void;
+  orderToEdit?: Order | null;
+}) {
+  const [name, setName] = useState(orderToEdit?.customerName || '');
+  const [piece, setPiece] = useState(orderToEdit?.pieceDescription || '');
+  const [notes, setNotes] = useState(orderToEdit?.notes || '');
+  const [date, setDate] = useState(orderToEdit?.deadline ? orderToEdit.deadline.toISOString().split('T')[0] : '');
+  const [isPartnership, setIsPartnership] = useState(orderToEdit?.isPartnership || false);
+  const [value, setValue] = useState(orderToEdit?.payment.totalValue || '');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !piece) return;
+
+    onAdd({
+      customerName: name,
+      pieceDescription: piece,
+      notes,
+      deadline: date ? new Date(date + 'T12:00:00') : null,
+      isPartnership,
+      payment: orderToEdit ? { ...orderToEdit.payment, totalValue: value } : {
+        totalValue: value,
+        type: null,
+        pixEntryPaid: false,
+        pixRemainingPaid: false,
+        cardInstallments: 1,
+        cardPaid: false
+      }
+    });
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-vinho/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        className="bg-creme max-w-md w-full rounded-3xl p-6 shadow-2xl border-2 border-rosa"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-6">
+          <div className="bg-vinho p-2 rounded-xl">
+            {orderToEdit ? <Edit className="w-6 h-6 text-rosa" /> : <Plus className="w-6 h-6 text-rosa" />}
+          </div>
+          <h3 className="text-2xl font-serif font-black text-vinho">
+            {orderToEdit ? 'Editar Encomenda' : 'Nova Encomenda'}
+          </h3>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-bold text-cinza uppercase mb-1">Nome do Cliente</label>
+            <input 
+              required
+              type="text" 
+              className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Ex: Maria Silva"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-cinza uppercase mb-1">Descrição da Peça</label>
+            <input 
+              required
+              type="text" 
+              className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho"
+              value={piece}
+              onChange={e => setPiece(e.target.value)}
+              placeholder="Ex: Porta-Alianças Floral"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-cinza uppercase mb-1">Observações / Detalhes</label>
+            <textarea 
+              className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho resize-none h-20"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Ex: Encomenda pai falecido, cores suaves..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold text-cinza uppercase mb-1">Prazo</label>
+              <input 
+                type="date" 
+                className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-cinza uppercase mb-1">Valor (R$)</label>
+              <input 
+                type="text" 
+                className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho"
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                placeholder="0,00"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button 
+              type="button"
+              onClick={() => setIsPartnership(!isPartnership)}
+              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${isPartnership ? 'bg-vinho border-vinho text-white' : 'border-rosa'}`}
+            >
+              {isPartnership && <Check className="w-3 h-3" />}
+            </button>
+            <span className="text-xs font-medium text-vinho">Este pedido é uma parceria?</span>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-white border-2 border-rosa text-vinho py-3 rounded-2xl font-bold hover:bg-rosa/10 transition-all"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit"
+              className="flex-1 bg-vinho text-creme py-3 rounded-2xl font-bold hover:bg-opacity-90 transition-all shadow-lg"
+            >
+              {orderToEdit ? 'Salvar' : 'Adicionar'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function Calendar({ 
+  month, 
+  year, 
+  orders, 
+  selectedDate, 
+  onDateClick 
+}: { 
+  month: number; 
+  year: number; 
+  orders: Order[];
+  selectedDate: Date | null;
+  onDateClick: (date: Date) => void;
+}) {
+  const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(year, month));
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+  
+  const days = useMemo(() => {
+    const arr = [];
+    // Padding for first day
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      arr.push(null);
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      arr.push(i);
+    }
+    return arr;
+  }, [month, year]);
+
+  const getDayStatus = (day: number) => {
+    const date = new Date(year, month, day);
+    const dayOrders = orders.filter(o => o.deadline && o.deadline.toDateString() === date.toDateString());
+    if (dayOrders.length === 0) return null;
+
+    if (dayOrders.some(o => !o.completed && !o.isPartnership && (getDaysRemaining(o.deadline) || 0) <= 3)) return 'bg-vermelho';
+    if (dayOrders.some(o => !o.completed && !o.isPartnership && (getDaysRemaining(o.deadline) || 0) <= 7)) return 'bg-amarelo';
+    if (dayOrders.some(o => o.isPartnership)) return 'bg-cinza';
+    return 'bg-verde';
+  };
+
+  return (
+    <div className="bg-white rounded-2xl p-4 shadow-sm border border-creme">
+      <h3 className="text-lg font-serif font-black text-vinho capitalize mb-4 text-center">{monthName} {year}</h3>
+      <div className="grid grid-cols-7 gap-1">
+        {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
+          <div key={`${d}-${i}`} className="text-[10px] font-bold text-cinza text-center pb-2">{d}</div>
+        ))}
+        {days.map((day, i) => {
+          if (!day) return <div key={i} className="aspect-square" />;
+          
+          const date = new Date(year, month, day);
+          const status = getDayStatus(day);
+          const isToday = date.toDateString() === TODAY.toDateString();
+          const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+          const hasOrders = orders.some(o => o.deadline && o.deadline.toDateString() === date.toDateString());
+          
+          return (
+            <button 
+              key={i} 
+              onClick={() => onDateClick(date)}
+              className={`aspect-square flex flex-col items-center justify-center rounded-lg text-xs relative transition-all ${
+                isSelected ? 'bg-vinho text-white scale-110 z-10 shadow-md' : 
+                hasOrders ? 'bg-creme/50 hover:bg-rosa/20 cursor-pointer' : 'bg-fundo/30'
+              } ${isToday && !isSelected ? 'ring-2 ring-vinho font-bold' : ''}`}
+            >
+              {day}
+              {status && !isSelected && (
+                <div className={`w-1.5 h-1.5 rounded-full absolute bottom-1 ${status}`} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+interface OrderCardProps {
+  order: Order;
+  index: number | string;
+  onUpdatePayment: (updates: Partial<PaymentInfo>) => void;
+  onToggleComplete: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  key?: React.Key;
+}
+
+function DeleteConfirmationModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-vinho/60 backdrop-blur-md z-[60] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        className="bg-creme max-w-sm w-full rounded-[32px] p-8 shadow-2xl border-2 border-rosa text-center"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="bg-vermelho/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+          <Trash2 className="w-8 h-8 text-vermelho" />
+        </div>
+        <h3 className="text-2xl font-serif font-black text-vinho mb-2">Excluir Pedido?</h3>
+        <p className="text-cinza text-sm mb-8">
+          Esta ação não pode ser desfeita. Tem certeza que deseja remover este pedido permanentemente?
+        </p>
+        <div className="flex flex-col gap-3">
+          <button 
+            onClick={onConfirm}
+            className="w-full bg-vermelho text-white py-4 rounded-2xl font-black text-sm hover:bg-opacity-90 transition-all shadow-lg"
+          >
+            Sim, Excluir
+          </button>
+          <button 
+            onClick={onClose}
+            className="w-full bg-white border-2 border-rosa text-vinho py-4 rounded-2xl font-black text-sm hover:bg-rosa/10 transition-all"
+          >
+            Cancelar
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function OrderCard({ 
+  order, 
+  index, 
+  onUpdatePayment, 
+  onToggleComplete,
+  onEdit,
+  onDelete
+}: OrderCardProps) {
+  const days = getDaysRemaining(order.deadline);
+  const statusColor = getStatusColor(days, order.isPartnership);
+  
+  const getBadge = () => {
+    if (order.completed) return { text: 'concluído', class: 'bg-creme text-cinza' };
+    if (order.isPartnership) return { text: 'parceria', class: 'bg-creme text-cinza' };
+    if (days === null) return { text: 'sem prazo', class: 'bg-verde/10 text-verde' };
+    if (days < 0) return { text: `${Math.abs(days)}d atrasado`, class: 'bg-vermelho text-white' };
+    if (days === 0) return { text: 'hoje!', class: 'bg-vermelho/10 text-vermelho' };
+    if (days <= 3) return { text: `${days}d restantes`, class: 'bg-vermelho/10 text-vermelho' };
+    if (days <= 7) return { text: `${days}d restantes`, class: 'bg-amarelo/10 text-amarelo' };
+    return { text: `${days}d restantes`, class: 'bg-verde/10 text-verde' };
+  };
+
+  const badge = getBadge();
+
+  return (
+    <motion.div 
+      layout
+      className={`bg-white rounded-2xl shadow-sm border-l-4 ${statusColor} overflow-hidden ${order.completed ? 'opacity-60' : ''}`}
+    >
+      <div className="p-4 flex items-start gap-4">
+        <div className="text-2xl font-serif font-black text-vinho/30 w-8 text-center pt-1">
+          {index}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-lg truncate">{order.customerName}</div>
+          <div className="text-xs text-cinza truncate">{order.pieceDescription}</div>
+          {order.notes && (
+            <div className="text-[10px] text-vinho/70 italic mt-1 bg-rosa/5 px-2 py-1 rounded border border-rosa/10">
+              "{order.notes}"
+            </div>
+          )}
+        </div>
+        <div className="text-right flex flex-col items-end gap-1">
+          <div className="flex gap-1 mb-1">
+            <button 
+              onClick={onEdit}
+              className="p-1.5 text-cinza hover:text-vinho hover:bg-creme rounded-lg transition-all"
+              title="Editar pedido"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              onClick={onDelete}
+              className="p-1.5 text-cinza hover:text-vermelho hover:bg-vermelho/10 rounded-lg transition-all"
+              title="Excluir pedido"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="text-xs font-bold text-vinho">
+            {order.deadline ? order.deadline.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '---'}
+          </div>
+          <div className="flex flex-col gap-1 items-end">
+            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${badge.class}`}>
+              {badge.text}
+            </span>
+            {order.payment.type && (
+              <span className="text-[8px] font-black text-vinho/40 uppercase tracking-widest bg-creme px-1.5 rounded">
+                {order.payment.type === 'pix' ? 'PIX' : 'Cartão'}
+              </span>
+            )}
+          </div>
+        </div>
+        <button 
+          onClick={onToggleComplete}
+          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${order.completed ? 'bg-verde border-verde text-white' : 'border-rosa text-transparent'}`}
+        >
+          <Check className="w-4 h-4" />
+        </button>
+      </div>
+
+      {!order.isPartnership && (
+        <div className="bg-creme/50 border-t border-creme p-4 space-y-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-cinza uppercase">Valor:</span>
+              <div className="relative">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-cinza">R$</span>
+                <input 
+                  type="text" 
+                  className="bg-white border border-rosa rounded-lg pl-7 pr-2 py-1 text-sm font-bold text-vinho w-24 outline-none focus:border-vinho"
+                  value={order.payment.totalValue}
+                  onChange={(e) => onUpdatePayment({ totalValue: e.target.value })}
+                  placeholder="0,00"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-cinza uppercase">Tipo:</span>
+              <div className="flex bg-white border border-rosa rounded-lg overflow-hidden">
+                <button 
+                  onClick={() => onUpdatePayment({ type: 'pix' })}
+                  className={`px-3 py-1 text-[10px] font-bold transition-all ${order.payment.type === 'pix' ? 'bg-verde text-white' : 'text-cinza hover:bg-creme'}`}
+                >
+                  PIX
+                </button>
+                <button 
+                  onClick={() => onUpdatePayment({ type: 'card' })}
+                  className={`px-3 py-1 text-[10px] font-bold transition-all ${order.payment.type === 'card' ? 'bg-azul text-white' : 'text-cinza hover:bg-creme'}`}
+                >
+                  CARTÃO
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {order.payment.type === 'pix' && (
+            <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-creme">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${order.payment.pixEntryPaid ? 'bg-verde/10 text-verde' : 'bg-amarelo/10 text-amarelo'}`}>
+                    {order.payment.pixEntryPaid ? '✓ Entrada' : 'Entrada 50%'}
+                  </span>
+                  <span className="text-xs font-bold text-vinho">
+                    {formatCurrency(parseFloat(order.payment.totalValue.replace(',', '.')) * 0.5 || 0)}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => onUpdatePayment({ pixEntryPaid: !order.payment.pixEntryPaid })}
+                  className={`text-[9px] font-bold px-3 py-1 rounded-full border transition-all ${order.payment.pixEntryPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
+                >
+                  {order.payment.pixEntryPaid ? '✓ Recebido' : 'Marcar recebido'}
+                </button>
+              </div>
+              <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-creme">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${order.payment.pixRemainingPaid ? 'bg-verde/10 text-verde' : 'bg-vermelho/10 text-vermelho'}`}>
+                    {order.payment.pixRemainingPaid ? '✓ Restante' : 'Restante 50%'}
+                  </span>
+                  <span className="text-xs font-bold text-vinho">
+                    {formatCurrency(parseFloat(order.payment.totalValue.replace(',', '.')) * 0.5 || 0)}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => onUpdatePayment({ pixRemainingPaid: !order.payment.pixRemainingPaid })}
+                  className={`text-[9px] font-bold px-3 py-1 rounded-full border transition-all ${order.payment.pixRemainingPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
+                >
+                  {order.payment.pixRemainingPaid ? '✓ Recebido' : 'Marcar recebido'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {order.payment.type === 'card' && (
+            <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-creme animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-cinza uppercase">Parc:</span>
+                <input 
+                  type="number" 
+                  className="w-12 border border-rosa rounded-lg px-2 py-1 text-xs font-bold text-vinho outline-none focus:border-azul"
+                  value={order.payment.cardInstallments}
+                  onChange={(e) => onUpdatePayment({ cardInstallments: parseInt(e.target.value) || 1 })}
+                />
+              </div>
+              <div className="flex-1 text-[10px] text-cinza">
+                {order.payment.cardInstallments}x de {formatCurrency((parseFloat(order.payment.totalValue.replace(',', '.')) || 0) / order.payment.cardInstallments)}
+              </div>
+              <button 
+                onClick={() => onUpdatePayment({ cardPaid: !order.payment.cardPaid })}
+                className={`text-[9px] font-bold px-3 py-1 rounded-full border transition-all ${order.payment.cardPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
+              >
+                {order.payment.cardPaid ? '✓ Recebido' : 'Marcar recebido'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+}
