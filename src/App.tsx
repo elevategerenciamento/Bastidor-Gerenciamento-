@@ -1385,7 +1385,7 @@ function AddOrderModal({
               className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho resize-none h-20"
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Ex: Encomenda pai falecido, cores suaves..."
+              placeholder="EX: Cores suaves, enviar antes, junto com laço"
             />
           </div>
 
