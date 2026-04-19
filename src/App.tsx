@@ -80,8 +80,14 @@ export default function App() {
 
       if (data) {
         setOrders(data.map(o => ({
-          ...o,
-          deadline: o.deadline ? new Date(o.deadline) : null
+          id: o.id,
+          customerName: o.customer_name,
+          pieceDescription: o.piece_description,
+          notes: o.notes,
+          deadline: o.deadline ? new Date(o.deadline) : null,
+          isPartnership: o.is_partnership,
+          completed: o.completed,
+          payment: o.payment
         })));
       }
     } catch (err) {
