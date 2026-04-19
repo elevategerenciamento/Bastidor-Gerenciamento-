@@ -1341,106 +1341,135 @@ function AddOrderModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-vinho/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-vinho/60 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto"
       onClick={onClose}
     >
       <motion.div 
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className="bg-creme max-w-md w-full rounded-3xl p-6 shadow-2xl border-2 border-rosa"
+        className="bg-creme max-w-lg w-full rounded-[40px] shadow-2xl border-2 border-rosa overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 mb-6">
-          <div className="bg-vinho p-2 rounded-xl">
-            {orderToEdit ? <Edit className="w-6 h-6 text-rosa" /> : <Plus className="w-6 h-6 text-rosa" />}
+        {/* Header decorativo */}
+        <div className="bg-vinho p-8 text-creme relative overflow-hidden">
+          <div className="absolute top-[-10%] right-[-10%] w-32 h-32 border-[10px] border-rosa/10 rounded-full" />
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="bg-rosa/20 p-3 rounded-2xl backdrop-blur-sm">
+              {orderToEdit ? <Edit className="w-8 h-8 text-rosa" /> : <Plus className="w-8 h-8 text-rosa" />}
+            </div>
+            <div>
+              <h3 className="text-3xl font-serif font-black tracking-tight">
+                {orderToEdit ? 'Editar Encomenda' : 'Nova Encomenda'}
+              </h3>
+              <p className="text-rosa/60 text-[10px] uppercase tracking-widest font-bold mt-1">Preencha os detalhes do seu bordado</p>
+            </div>
           </div>
-          <h3 className="text-2xl font-serif font-black text-vinho">
-            {orderToEdit ? 'Editar Encomenda' : 'Nova Encomenda'}
-          </h3>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-[10px] font-bold text-cinza uppercase mb-1">Nome do Cliente</label>
-            <input 
-              required
-              type="text" 
-              className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Ex: Maria Silva"
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Quem é a cliente?</label>
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+                  <Menu className="w-4 h-4" />
+                </div>
+                <input 
+                  required
+                  type="text" 
+                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium placeholder:text-cinza/30 shadow-sm"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Nome completo da cliente..."
+                />
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-[10px] font-bold text-cinza uppercase mb-1">Descrição da Peça</label>
-            <input 
-              required
-              type="text" 
-              className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho"
-              value={piece}
-              onChange={e => setPiece(e.target.value)}
-              placeholder="Ex: Porta-Alianças Floral"
-            />
-          </div>
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">O que vamos bordar?</label>
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <input 
+                  required
+                  type="text" 
+                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium placeholder:text-cinza/30 shadow-sm"
+                  value={piece}
+                  onChange={e => setPiece(e.target.value)}
+                  placeholder="Ex: Quadro Maternidade Ramos..."
+                />
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-[10px] font-bold text-cinza uppercase mb-1">Observações / Detalhes</label>
-            <textarea 
-              className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho resize-none h-20"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="EX: Cores suaves, enviar antes, junto com laço"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[10px] font-bold text-cinza uppercase mb-1">Prazo</label>
-              <input 
-                type="date" 
-                className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho"
-                value={date}
-                onChange={e => setDate(e.target.value)}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Alguma observação importante?</label>
+              <textarea 
+                className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all h-28 resize-none text-vinho font-medium placeholder:text-cinza/30 shadow-sm"
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Detalhes de cores, tecidos ou pedidos especiais da cliente..."
               />
             </div>
-            <div>
-              <label className="block text-[10px] font-bold text-cinza uppercase mb-1">Valor (R$)</label>
-              <input 
-                type="text" 
-                className="w-full bg-white border border-rosa rounded-xl px-4 py-2 text-sm outline-none focus:border-vinho"
-                value={value}
-                onChange={e => setValue(e.target.value)}
-                placeholder="0,00"
-              />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5 flex-1">
+                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Para quando?</label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa pointer-events-none transition-colors group-focus-within:text-vinho">
+                    <CalendarIcon className="w-4 h-4" />
+                  </div>
+                  <input 
+                    type="date" 
+                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm appearance-none"
+                    value={date}
+                    onChange={e => setDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5 flex-1">
+                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Valor do Bordado</label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">BRL</div>
+                  <input 
+                    type="text" 
+                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-12 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
+                    value={value}
+                    onChange={e => setValue(e.target.value)}
+                    placeholder="0,00"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 pt-2">
-            <button 
-              type="button"
-              onClick={() => setIsPartnership(!isPartnership)}
-              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${isPartnership ? 'bg-vinho border-vinho text-white' : 'border-rosa'}`}
-            >
-              {isPartnership && <Check className="w-3 h-3" />}
-            </button>
-            <span className="text-xs font-medium text-vinho">Este pedido é uma parceria?</span>
+          <div 
+            onClick={() => setIsPartnership(!isPartnership)}
+            className="flex items-center gap-3 p-4 bg-white/50 border-2 border-rosa/20 rounded-2xl cursor-pointer hover:bg-white transition-all group shadow-sm"
+          >
+            <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isPartnership ? 'bg-vinho border-vinho text-white' : 'border-rosa text-transparent group-hover:border-vinho'}`}>
+              <Check className="w-4 h-4" />
+            </div>
+            <span className="text-sm font-bold text-vinho/70 group-hover:text-vinho transition-colors">Este pedido é uma parceria / collab?</span>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-4 pt-4 pb-2">
             <button 
               type="button"
               onClick={onClose}
-              className="flex-1 bg-white border-2 border-rosa text-vinho py-3 rounded-2xl font-bold hover:bg-rosa/10 transition-all"
+              className="flex-1 bg-white border-2 border-rosa/40 text-vinho/60 py-5 rounded-[24px] font-black text-sm hover:bg-rosa/10 hover:text-vinho transition-all uppercase tracking-widest shadow-sm"
             >
               Cancelar
             </button>
             <button 
               type="submit"
-              className="flex-1 bg-vinho text-creme py-3 rounded-2xl font-bold hover:bg-opacity-90 transition-all shadow-lg"
+              className="flex-[1.5] bg-vinho text-creme py-5 rounded-[24px] font-black text-sm hover:bg-opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl uppercase tracking-widest"
             >
-              {orderToEdit ? 'Salvar' : 'Adicionar'}
+              {orderToEdit ? 'Salvar Alterações' : 'Cadastrar Bordado'}
             </button>
           </div>
         </form>
