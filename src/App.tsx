@@ -686,12 +686,15 @@ export default function App() {
       <main className="max-w-2xl mx-auto px-4 mt-6 space-y-8">
         {/* Finance Section */}
         <section className="space-y-4">
-          <div className="flex items-center gap-2 border-b border-rosa pb-2">
-            <TrendingUp className="w-5 h-5 text-vinho" />
-            <h2 className="text-xl font-serif text-vinho">Resumo Financeiro</h2>
+          <div className="flex items-center justify-between border-b border-rosa pb-2">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-vinho" />
+              <h2 className="text-xl font-serif text-vinho">Resumo Financeiro</h2>
+            </div>
+            <div className="text-[10px] text-cinza font-black uppercase tracking-widest">{monthName}</div>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <motion.button 
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -699,14 +702,16 @@ export default function App() {
                 setFinanceDetailType('received');
                 setIsFinanceDetailsOpen(true);
               }}
-              className={`p-4 rounded-2xl shadow-lg text-left transition-all ${activeFilter === 'received' ? 'ring-4 ring-dourado bg-vinho text-white' : 'bg-vinho text-white'}`}
+              className={`p-5 rounded-3xl shadow-lg text-left transition-all flex flex-col justify-between min-h-[140px] ${activeFilter === 'received' ? 'ring-4 ring-dourado bg-vinho text-white' : 'bg-vinho text-white'}`}
             >
-              <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider opacity-70 mb-1">
-                <CheckCircle2 className="w-3 h-3" />
-                <span>Já recebi</span>
+              <div className="bg-white/10 w-10 h-10 rounded-2xl flex items-center justify-center mb-4">
+                <CheckCircle2 className="w-6 h-6 text-rosa" />
               </div>
-              <div className="text-2xl font-serif font-black">{formatCurrency(stats.totalReceived)}</div>
-              <div className="text-[10px] opacity-60 mt-1">{stats.receivedCount} pagamentos</div>
+              <div>
+                <div className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-1">Total Recebido</div>
+                <div className="text-2xl font-serif font-black">{formatCurrency(stats.totalReceived)}</div>
+                <div className="text-[10px] opacity-40 font-bold mt-1 lowercase">{stats.receivedCount} pagamentos identificados</div>
+              </div>
             </motion.button>
             
             <motion.button 
@@ -716,35 +721,38 @@ export default function App() {
                 setFinanceDetailType('pending');
                 setIsFinanceDetailsOpen(true);
               }}
-              className={`p-4 rounded-2xl shadow-sm text-left border-2 transition-all ${activeFilter === 'pending' ? 'ring-4 ring-vinho bg-white border-rosa' : 'bg-white border-rosa'}`}
+              className={`p-5 rounded-3xl shadow-sm text-left border-2 transition-all flex flex-col justify-between min-h-[140px] ${activeFilter === 'pending' ? 'ring-4 ring-vinho bg-white border-rosa' : 'bg-white border-rosa'}`}
             >
-              <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-cinza mb-1">
-                <Clock className="w-3 h-3" />
-                <span>A receber</span>
-              </div>
-              <div className="text-2xl font-serif font-black text-vinho">{formatCurrency(stats.totalPending)}</div>
-              <div className="text-[10px] text-cinza opacity-60 mt-1">{stats.pendingCount} pendentes</div>
-            </motion.button>
-          </div>
-
-          <motion.div 
-            whileHover={{ scale: 1.01 }}
-            className="p-4 rounded-2xl bg-white border-2 border-rosa shadow-sm flex justify-between items-center"
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-vermelho/10 p-2 rounded-xl">
-                <Package className="w-5 h-5 text-vermelho" />
+              <div className="bg-rosa/10 w-10 h-10 rounded-2xl flex items-center justify-center mb-4">
+                <Clock className="w-6 h-6 text-vinho" />
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-cinza">Gastos com Estoque</div>
-                <div className="text-xl font-serif font-black text-vermelho">{formatCurrency(stats.totalInventoryExpenses)}</div>
+                <div className="text-[10px] uppercase font-black tracking-widest text-cinza mb-1">A Receber</div>
+                <div className="text-2xl font-serif font-black text-vinho">{formatCurrency(stats.totalPending)}</div>
+                <div className="text-[10px] text-cinza opacity-60 font-bold mt-1 lowercase">{stats.pendingCount} pendências este mês</div>
               </div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] text-cinza font-bold">{inventory.length} compras</div>
-              <div className="text-[9px] text-cinza opacity-60">reposição de insumos</div>
-            </div>
-          </motion.div>
+            </motion.button>
+
+            <motion.div 
+              whileHover={{ scale: 1.01 }}
+              className="p-5 rounded-3xl bg-creme border-2 border-rosa/50 shadow-sm flex flex-col justify-between min-h-[140px] sm:col-span-2 lg:col-span-1"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="bg-vermelho/10 w-10 h-10 rounded-2xl flex items-center justify-center">
+                  <Package className="w-6 h-6 text-vermelho" />
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] text-cinza font-black uppercase">{inventory.length} compras</div>
+                  <div className="text-[8px] text-cinza opacity-40 uppercase font-bold">estoque & insumos</div>
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase font-black tracking-widest text-cinza mb-1">Gastos Totais</div>
+                <div className="text-2xl font-serif font-black text-vermelho">{formatCurrency(stats.totalInventoryExpenses)}</div>
+                <div className="text-[10px] text-cinza opacity-40 font-bold mt-1 lowercase">deduzido do balanço geral</div>
+              </div>
+            </motion.div>
+          </div>
 
 
           <div className="grid grid-cols-3 gap-2">
@@ -1856,42 +1864,42 @@ function OrderCard({
       </div>
 
       {!order.isPartnership && (
-        <div className="bg-creme/50 border-t border-creme p-4 space-y-4">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-cinza uppercase">Valor:</span>
-              <div className="relative">
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-cinza">R$</span>
+        <div className="bg-creme/30 border-t border-rosa/10 p-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex items-center justify-between sm:justify-start gap-3">
+              <span className="text-[10px] font-black text-cinza/60 uppercase">Valor Total:</span>
+              <div className="relative flex-1 sm:flex-initial">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-cinza/40">R$</span>
                 <input 
-                  type="text" 
-                  className="bg-white border border-rosa rounded-lg pl-7 pr-2 py-1 text-sm font-bold text-vinho w-24 outline-none focus:border-vinho"
-                  value={order.payment.totalValue}
-                  onChange={(e) => onUpdatePayment({ totalValue: e.target.value })}
-                  placeholder="0,00"
-                />
+                   type="text" 
+                   className="bg-white border-2 border-rosa/30 rounded-xl pl-9 pr-3 py-2 text-sm font-black text-vinho w-full sm:w-32 outline-none focus:border-vinho transition-all"
+                   value={order.payment.totalValue}
+                   onChange={(e) => onUpdatePayment({ totalValue: e.target.value })}
+                   placeholder="0,00"
+                 />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-cinza uppercase">Tipo:</span>
-              <div className="flex bg-white border border-rosa rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between sm:justify-end gap-3">
+              <span className="text-[10px] font-black text-cinza/60 uppercase">Pagamento:</span>
+              <div className="flex bg-white border-2 border-rosa/30 rounded-xl overflow-hidden p-1 shadow-sm">
                 <button 
-                  onClick={() => onUpdatePayment({ type: 'pix' })}
-                  className={`px-3 py-1 text-[10px] font-bold transition-all ${order.payment.type === 'pix' ? 'bg-verde text-white' : 'text-cinza hover:bg-creme'}`}
-                >
-                  PIX
-                </button>
-                <button 
-                  onClick={() => onUpdatePayment({ type: 'card' })}
-                  className={`px-3 py-1 text-[10px] font-bold transition-all ${order.payment.type === 'card' ? 'bg-azul text-white' : 'text-cinza hover:bg-creme'}`}
-                >
-                  CARTÃO
-                </button>
+                   onClick={() => onUpdatePayment({ type: 'pix' })}
+                   className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${order.payment.type === 'pix' ? 'bg-verde text-white' : 'text-cinza hover:bg-creme'}`}
+                 >
+                   PIX
+                 </button>
+                 <button 
+                   onClick={() => onUpdatePayment({ type: 'card' })}
+                   className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${order.payment.type === 'card' ? 'bg-azul text-white' : 'text-cinza hover:bg-creme'}`}
+                 >
+                   CARTÃO
+                 </button>
               </div>
             </div>
           </div>
 
           {order.payment.type === 'pix' && (
-            <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
               {(() => {
                 const total = parseFloat(order.payment.totalValue.replace(',', '.')) || 0;
                 const entry = parseFloat(order.payment.pixEntryAmount?.replace(',', '.') || '0') || (total * 0.5);
@@ -1899,64 +1907,65 @@ function OrderCard({
                 const entryPct = total > 0 ? Math.round((entry / total) * 100) : 0;
                 
                 return (
-                  <>
-                    <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-creme">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${order.payment.pixEntryPaid ? 'bg-verde/10 text-verde' : 'bg-amarelo/10 text-amarelo'}`}>
-                          {order.payment.pixEntryPaid ? '✓ Entrada' : `Entrada ${entryPct}%`}
-                        </span>
-                        <span className="text-xs font-bold text-vinho">
+                  <div className="grid grid-cols-1 gap-2">
+                    <div className="flex items-center justify-between bg-white p-3 rounded-2xl border-2 border-creme hover:border-rosa/20 transition-all shadow-sm">
+                      <div className="flex flex-col">
+                        <span className="text-[8px] font-black text-cinza uppercase tracking-widest mb-0.5">Sinal ({entryPct}%)</span>
+                        <span className="text-sm font-black text-vinho">
                           {formatCurrency(entry)}
                         </span>
                       </div>
                       <button 
                         onClick={() => onUpdatePayment({ pixEntryPaid: !order.payment.pixEntryPaid })}
-                        className={`text-[9px] font-bold px-3 py-1 rounded-full border transition-all ${order.payment.pixEntryPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
+                        className={`text-[10px] font-black px-4 py-2 rounded-xl border-2 transition-all ${order.payment.pixEntryPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
                       >
-                        {order.payment.pixEntryPaid ? '✓ Recebido' : 'Marcar recebido'}
+                        {order.payment.pixEntryPaid ? 'RECEBIDO' : 'CONFIRMAR'}
                       </button>
                     </div>
-                    <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-creme">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${order.payment.pixRemainingPaid ? 'bg-verde/10 text-verde' : 'bg-vermelho/10 text-vermelho'}`}>
-                          {order.payment.pixRemainingPaid ? '✓ Restante' : `Restante ${100 - entryPct}%`}
-                        </span>
-                        <span className="text-xs font-bold text-vinho">
+                    <div className="flex items-center justify-between bg-white p-3 rounded-2xl border-2 border-creme hover:border-rosa/20 transition-all shadow-sm">
+                      <div className="flex flex-col">
+                        <span className="text-[8px] font-black text-cinza uppercase tracking-widest mb-0.5">Saldo ({100 - entryPct}%)</span>
+                        <span className="text-sm font-black text-vinho">
                           {formatCurrency(remaining)}
                         </span>
                       </div>
                       <button 
                         onClick={() => onUpdatePayment({ pixRemainingPaid: !order.payment.pixRemainingPaid })}
-                        className={`text-[9px] font-bold px-3 py-1 rounded-full border transition-all ${order.payment.pixRemainingPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
+                        className={`text-[10px] font-black px-4 py-2 rounded-xl border-2 transition-all ${order.payment.pixRemainingPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
                       >
-                        {order.payment.pixRemainingPaid ? '✓ Recebido' : 'Marcar recebido'}
+                        {order.payment.pixRemainingPaid ? 'RECEBIDO' : 'CONFIRMAR'}
                       </button>
                     </div>
-                  </>
+                  </div>
                 );
               })()}
             </div>
           )}
 
           {order.payment.type === 'card' && (
-            <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-creme animate-in fade-in slide-in-from-top-1 duration-200">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-cinza uppercase">Parc:</span>
-                <input 
-                  type="number" 
-                  className="w-12 border border-rosa rounded-lg px-2 py-1 text-xs font-bold text-vinho outline-none focus:border-azul"
-                  value={order.payment.cardInstallments}
-                  onChange={(e) => onUpdatePayment({ cardInstallments: parseInt(e.target.value) || 1 })}
-                />
-              </div>
-              <div className="flex-1 text-[10px] text-cinza">
-                {order.payment.cardInstallments}x de {formatCurrency((parseFloat(order.payment.totalValue.replace(',', '.')) || 0) / order.payment.cardInstallments)}
+            <div className="flex items-center justify-between bg-white p-3 rounded-2xl border-2 border-creme animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="bg-azul/10 p-2 rounded-xl text-azul">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-[8px] font-black text-cinza uppercase tracking-widest">Parcelamento</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <input 
+                      type="number" 
+                      className="w-12 bg-creme border-none rounded-lg px-2 py-1 text-xs font-black text-vinho outline-none"
+                      value={order.payment.cardInstallments}
+                      onChange={(e) => onUpdatePayment({ cardInstallments: parseInt(e.target.value) || 1 })}
+                    />
+                    <span className="text-[10px] font-bold text-cinza">vezes</span>
+                  </div>
+                </div>
               </div>
               <button 
                 onClick={() => onUpdatePayment({ cardPaid: !order.payment.cardPaid })}
-                className={`text-[9px] font-bold px-3 py-1 rounded-full border transition-all ${order.payment.cardPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
+                className={`text-[10px] font-black px-4 py-2 rounded-xl border-2 transition-all ${order.payment.cardPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
               >
-                {order.payment.cardPaid ? '✓ Recebido' : 'Marcar recebido'}
+                {order.payment.cardPaid ? 'PAGO' : 'CONFIRMAR'}
               </button>
             </div>
           )}
@@ -2013,47 +2022,47 @@ function InventoryModal({
         </div>
 
         <div className="flex-1 overflow-y-auto max-w-2xl mx-auto w-full p-6 md:p-8 space-y-8 custom-scrollbar">
-          <div className="flex justify-between items-center">
-            <h3 className="text-xl font-serif text-vinho">Últimas Compras</h3>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <h3 className="text-xl font-serif text-vinho border-l-4 border-dourado pl-3">Últimas Compras</h3>
             <button 
               onClick={() => setIsAddingItem(true)}
-              className="bg-dourado text-white px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all"
+              className="bg-dourado text-white px-8 py-4 rounded-[20px] font-black text-sm flex items-center justify-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all w-full sm:w-auto uppercase tracking-widest"
             >
               <Plus className="w-5 h-5" />
-              REGISTRAR COMPRA
+              Registrar Compra
             </button>
           </div>
 
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 pb-12">
             {items.length > 0 ? (
               items.map(item => (
-                <div key={item.id} className="bg-white p-5 rounded-3xl border border-rosa/30 shadow-sm flex justify-between items-center group hover:border-vinho/30 transition-all">
+                <div key={item.id} className="bg-white p-5 rounded-[32px] border-2 border-rosa/20 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center group hover:border-vinho/20 transition-all gap-4">
                   <div className="flex gap-4 items-center min-w-0">
-                    <div className="bg-creme p-3 rounded-2xl group-hover:bg-rosa/10 transition-colors">
+                    <div className="bg-creme p-4 rounded-2xl group-hover:bg-rosa/10 transition-colors shrink-0">
                       <Sparkles className="w-6 h-6 text-vinho/40" />
                     </div>
                     <div className="min-w-0">
-                      <div className="font-bold text-vinho text-lg truncate">{item.name}</div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black bg-rosa/20 text-vinho px-2 py-0.5 rounded uppercase">{item.category}</span>
+                      <div className="font-black text-vinho text-lg truncate leading-tight mb-1">{item.name}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black bg-rosa/20 text-vinho px-2 py-0.5 rounded uppercase tracking-tighter">{item.category}</span>
                         <span className="text-[10px] text-cinza font-bold">{item.quantity}</span>
-                        <span className="text-[10px] text-cinza opacity-40">•</span>
-                        <span className="text-[10px] text-cinza uppercase">{item.purchaseDate.toLocaleDateString('pt-BR')}</span>
+                        <span className="text-[10px] text-cinza opacity-40 hidden sm:inline">•</span>
+                        <span className="text-[10px] text-cinza uppercase font-bold">{item.purchaseDate.toLocaleDateString('pt-BR')}</span>
                       </div>
                     </div>
                   </div>
-                  <div className="text-right flex items-center gap-4">
-                    <div>
-                      <div className="text-xl font-black text-vinho">{formatCurrency(parseFloat(item.price.replace(',', '.')))}</div>
-                      <div className="text-[9px] text-cinza font-black uppercase tracking-tighter opacity-60">
+                  <div className="flex items-center justify-between sm:justify-end gap-6 border-t sm:border-none pt-4 sm:pt-0 border-creme">
+                    <div className="sm:text-right">
+                      <div className="text-2xl font-serif font-black text-vinho leading-none mb-1">{formatCurrency(parseFloat(item.price.replace(',', '.')))}</div>
+                      <div className="text-[9px] text-cinza font-black uppercase tracking-widest opacity-60">
                         {item.paymentMethod === 'cash' ? 'À Vista' : item.paymentMethod === 'pix' ? 'PIX' : `Cartão ${item.installments}x`}
                       </div>
                     </div>
                     <button 
                       onClick={() => onDelete(item.id)}
-                      className="p-2 text-cinza hover:text-vermelho hover:bg-vermelho/5 rounded-xl transition-all"
+                      className="p-3 text-vermelho hover:bg-vermelho/5 rounded-2xl transition-all border border-vermelho/10 sm:border-none"
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className="w-6 h-6" />
                     </button>
                   </div>
                 </div>
