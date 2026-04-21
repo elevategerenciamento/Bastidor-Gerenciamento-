@@ -33,7 +33,7 @@ import {
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { INITIAL_ORDERS, TODAY } from './constants';
-import { Order, PaymentInfo } from './types';
+import { Order, PaymentInfo, InventoryItem } from './types';
 import { formatCurrency, getDaysRemaining, getStatusColor } from './lib/utils';
 import { supabase } from './lib/supabase';
 
@@ -247,7 +247,7 @@ export default function App() {
       totalInventoryExpenses
     };
 
-  }, [orders]);
+  }, [orders, inventory]);
 
   const filteredOrders = useMemo(() => {
     let result = [...orders];
@@ -542,6 +542,7 @@ export default function App() {
     
     doc.save(`Relatorio_Bastidor_${monthName}_2026.pdf`);
   };
+  const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(TODAY.getFullYear(), reportMonth));
 
   if (loading) {
     return (
