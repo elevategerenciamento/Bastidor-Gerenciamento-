@@ -42,6 +42,8 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+
 
   useEffect(() => {
     // Check current session
@@ -59,7 +61,9 @@ export default function App() {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchOrders();
+        fetchInventory();
       } else {
+
         setOrders([]);
         setLoading(false);
       }
@@ -97,6 +101,32 @@ export default function App() {
     }
   };
 
+  const fetchInventory = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .order('purchase_date', { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        setInventory(data.map(item => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity,
+          price: item.price.toString(),
+          purchaseDate: new Date(item.purchase_date),
+          paymentMethod: item.payment_method,
+          installments: item.installments
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching inventory:', err);
+    }
+  };
+
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'received' | 'pending' | 'urgent' | 'completed'>('all');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -108,6 +138,8 @@ export default function App() {
   const [reportMonth, setReportMonth] = useState<number>(TODAY.getMonth());
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+
 
   const months = useMemo(() => {
     const currentMonth = TODAY.getMonth();
@@ -140,6 +172,12 @@ export default function App() {
 
     const receivedPayments: any[] = [];
     const pendingPayments: any[] = [];
+
+    let totalInventoryExpenses = 0;
+    inventory.forEach(item => {
+      totalInventoryExpenses += parseFloat(item.price.replace(',', '.')) || 0;
+    });
+
 
     orders.forEach(o => {
       if (o.isPartnership) return;
@@ -205,8 +243,10 @@ export default function App() {
       pendingCount,
       monthlyTotals,
       receivedPayments,
-      pendingPayments
+      pendingPayments,
+      totalInventoryExpenses
     };
+
   }, [orders]);
 
   const filteredOrders = useMemo(() => {
@@ -343,6 +383,56 @@ export default function App() {
   };
 
   const confirmDelete = async () => {
+    // ... logic for orders ...
+  };
+
+  const addInventoryItem = async (newItem: Omit<InventoryItem, 'id'>) => {
+    if (!user) return;
+    
+    const { data, error } = await supabase
+      .from('inventory')
+      .insert([{
+        name: newItem.name,
+        category: newItem.category,
+        quantity: newItem.quantity,
+        price: parseFloat(newItem.price.replace(',', '.')) || 0,
+        purchase_date: newItem.purchaseDate.toISOString(),
+        payment_method: newItem.paymentMethod,
+        installments: newItem.installments || 1,
+        user_id: user.id
+      }])
+      .select()
+      .single();
+      
+    if (!error && data) {
+      setInventory(prev => [{
+        id: data.id,
+        name: data.name,
+        category: data.category,
+        quantity: data.quantity,
+        price: data.price.toString(),
+        purchaseDate: new Date(data.purchase_date),
+        paymentMethod: data.payment_method,
+        installments: data.installments
+      }, ...prev]);
+    } else if (error) {
+      console.error('Error adding inventory item:', error);
+    }
+  };
+
+  const deleteInventoryItem = async (id: string) => {
+    const { error } = await supabase
+      .from('inventory')
+      .delete()
+      .eq('id', id);
+      
+    if (!error) {
+      setInventory(prev => prev.filter(item => item.id !== id));
+    } else {
+      console.error('Error deleting inventory item:', error);
+    }
+  };
+
     if (deletingOrderId) {
       const { error } = await supabase
         .from('orders')
@@ -520,9 +610,19 @@ export default function App() {
                 </div>
               </div>
 
-              <nav className="flex-1 p-4 space-y-2 mt-4">
+                <button 
+                  onClick={() => {
+                    setIsInventoryOpen(true);
+                    setIsSidebarOpen(false);
+                  }}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
+                >
+                  <Package className="w-5 h-5" />
+                  <span>Estoque & Compras</span>
+                </button>
                 <button 
                   onClick={() => setIsSidebarOpen(false)}
+
                   className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
                 >
                   <CreditCard className="w-5 h-5" />
@@ -627,6 +727,26 @@ export default function App() {
               <div className="text-[10px] text-cinza opacity-60 mt-1">{stats.pendingCount} pendentes</div>
             </motion.button>
           </div>
+
+          <motion.div 
+            whileHover={{ scale: 1.01 }}
+            className="p-4 rounded-2xl bg-white border-2 border-rosa shadow-sm flex justify-between items-center"
+          >
+            <div className="flex items-center gap-3">
+              <div className="bg-vermelho/10 p-2 rounded-xl">
+                <Package className="w-5 h-5 text-vermelho" />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-cinza">Gastos com Estoque</div>
+                <div className="text-xl font-serif font-black text-vermelho">{formatCurrency(stats.totalInventoryExpenses)}</div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] text-cinza font-bold">{inventory.length} compras</div>
+              <div className="text-[9px] text-cinza opacity-60">reposição de insumos</div>
+            </div>
+          </motion.div>
+
 
           <div className="grid grid-cols-3 gap-2">
             {[
@@ -970,6 +1090,16 @@ export default function App() {
             onConfirm={confirmDelete}
           />
         )}
+        {isInventoryOpen && (
+          <InventoryModal 
+            items={inventory}
+            onClose={() => setIsInventoryOpen(false)}
+            onAdd={addInventoryItem}
+            onDelete={deleteInventoryItem}
+          />
+        )}
+      </AnimatePresence>
+
       </AnimatePresence>
     </div>
   );
@@ -1835,6 +1965,279 @@ function OrderCard({
           )}
         </div>
       )}
+    </motion.div>
+  );
+}
+
+function InventoryModal({ 
+  items, 
+  onClose,
+  onAdd,
+  onDelete
+}: { 
+  items: InventoryItem[]; 
+  onClose: () => void;
+  onAdd: (item: Omit<InventoryItem, 'id'>) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [isAddingItem, setIsAddingItem] = useState(false);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-vinho/80 backdrop-blur-xl z-[150] flex flex-col pt-10"
+      onClick={onClose}
+    >
+      <motion.div 
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="flex-1 bg-creme rounded-t-[48px] shadow-2xl border-t-4 border-rosa flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-8 bg-vinho text-white">
+          <div className="max-w-2xl mx-auto flex justify-between items-center">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="bg-rosa/20 p-2 rounded-xl backdrop-blur-sm">
+                  <Package className="w-8 h-8 text-rosa" />
+                </div>
+                <h2 className="text-3xl font-serif font-black lowercase tracking-tighter">estoque</h2>
+              </div>
+              <p className="text-rosa/60 text-xs uppercase tracking-widest font-bold">controle de insumos e materiais</p>
+            </div>
+            <button onClick={onClose} className="p-3 hover:bg-white/10 rounded-full transition-all">
+              <X className="w-8 h-8" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto max-w-2xl mx-auto w-full p-6 md:p-8 space-y-8 custom-scrollbar">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-serif text-vinho">Últimas Compras</h3>
+            <button 
+              onClick={() => setIsAddingItem(true)}
+              className="bg-dourado text-white px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              REGISTRAR COMPRA
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {items.length > 0 ? (
+              items.map(item => (
+                <div key={item.id} className="bg-white p-5 rounded-3xl border border-rosa/30 shadow-sm flex justify-between items-center group hover:border-vinho/30 transition-all">
+                  <div className="flex gap-4 items-center min-w-0">
+                    <div className="bg-creme p-3 rounded-2xl group-hover:bg-rosa/10 transition-colors">
+                      <Sparkles className="w-6 h-6 text-vinho/40" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-vinho text-lg truncate">{item.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black bg-rosa/20 text-vinho px-2 py-0.5 rounded uppercase">{item.category}</span>
+                        <span className="text-[10px] text-cinza font-bold">{item.quantity}</span>
+                        <span className="text-[10px] text-cinza opacity-40">•</span>
+                        <span className="text-[10px] text-cinza uppercase">{item.purchaseDate.toLocaleDateString('pt-BR')}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right flex items-center gap-4">
+                    <div>
+                      <div className="text-xl font-black text-vinho">{formatCurrency(parseFloat(item.price.replace(',', '.')))}</div>
+                      <div className="text-[9px] text-cinza font-black uppercase tracking-tighter opacity-60">
+                        {item.paymentMethod === 'cash' ? 'À Vista' : item.paymentMethod === 'pix' ? 'PIX' : `Cartão ${item.installments}x`}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => onDelete(item.id)}
+                      className="p-2 text-cinza hover:text-vermelho hover:bg-vermelho/5 rounded-xl transition-all"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-20 bg-white/50 rounded-3xl border-2 border-dashed border-rosa/30">
+                <Package className="w-12 h-12 text-rosa mx-auto mb-4 opacity-30" />
+                <p className="text-cinza font-medium">Nenhum item em estoque. Comece registrando suas compras!</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <AnimatePresence>
+          {isAddingItem && (
+            <AddInventoryModal 
+              onClose={() => setIsAddingItem(false)}
+              onAdd={(newItem) => {
+                onAdd(newItem);
+                setIsAddingItem(false);
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function AddInventoryModal({ 
+  onClose, 
+  onAdd 
+}: { 
+  onClose: () => void; 
+  onAdd: (item: Omit<InventoryItem, 'id'>) => void;
+}) {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [price, setPrice] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [method, setMethod] = useState<'cash' | 'pix' | 'card'>('pix');
+  const [installments, setInstallments] = useState(1);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onAdd({
+      name,
+      category,
+      quantity,
+      price,
+      purchaseDate: new Date(date + 'T12:00:00'),
+      paymentMethod: method,
+      installments
+    });
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-vinho/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        className="bg-creme max-w-lg w-full rounded-[40px] shadow-2xl border-2 border-rosa overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="bg-vinho p-8 text-white relative">
+          <h3 className="text-3xl font-serif font-black tracking-tight">Novo Insumo</h3>
+          <p className="text-rosa/60 text-[10px] uppercase tracking-widest font-bold mt-1">O que você comprou para o ateliê?</p>
+          <button onClick={onClose} className="absolute top-8 right-8 p-1 hover:bg-white/10 rounded-full">
+            <X className="w-6 h-6 text-rosa" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-8 space-y-5">
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <label className="block text-[10px] font-black text-cinza uppercase ml-1">Descrição</label>
+              <input 
+                required
+                className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                placeholder="Ex: Linhas Anchor meada, Tecido Linho..."
+                value={name}
+                onChange={e => setName(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-cinza uppercase ml-1">Categoria</label>
+                <select 
+                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                  value={category}
+                  onChange={e => setCategory(e.target.value)}
+                >
+                  <option value="">Selecione...</option>
+                  <option value="Linha">Linha / Meada</option>
+                  <option value="Tecido">Tecido / Pano</option>
+                  <option value="Bastidor">Bastidor</option>
+                  <option value="Agulha">Agulha</option>
+                  <option value="Embalagem">Embalagem</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-cinza uppercase ml-1">Quantidade</label>
+                <input 
+                  required
+                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                  placeholder="Ex: 5 unid"
+                  value={quantity}
+                  onChange={e => setQuantity(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-cinza uppercase ml-1">Valor Total</label>
+                <input 
+                  required
+                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                  placeholder="0,00"
+                  value={price}
+                  onChange={e => setPrice(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-cinza uppercase ml-1">Data da Compra</label>
+                <input 
+                  type="date"
+                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[10px] font-black text-cinza uppercase ml-1">Forma de Pagamento</label>
+              <div className="flex bg-white border-2 border-rosa/30 rounded-2xl overflow-hidden p-1">
+                {(['cash', 'pix', 'card'] as const).map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMethod(m)}
+                    className={`flex-1 py-3 text-[10px] font-bold rounded-xl transition-all ${method === m ? 'bg-vinho text-white' : 'text-cinza hover:bg-rosa/10'}`}
+                  >
+                    {m === 'cash' ? 'À VISTA' : m === 'pix' ? 'PIX' : 'CARTÃO'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {method === 'card' && (
+              <div className="space-y-1 animate-in slide-in-from-top-2 duration-300">
+                <label className="block text-[10px] font-black text-cinza uppercase ml-1">Parcelas</label>
+                <input 
+                  type="number"
+                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                  value={installments}
+                  onChange={e => setInstallments(parseInt(e.target.value) || 1)}
+                />
+              </div>
+            )}
+          </div>
+
+          <button 
+            type="submit"
+            className="w-full bg-dourado text-white py-5 rounded-[24px] font-black text-lg hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl uppercase tracking-widest mt-4"
+          >
+            Salvar no Estoque
+          </button>
+        </form>
+      </motion.div>
     </motion.div>
   );
 }
