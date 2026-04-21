@@ -1513,7 +1513,7 @@ function Calendar({
     if (dayOrders.length === 0) return null;
 
     if (dayOrders.some(o => !o.completed && !o.isPartnership && (getDaysRemaining(o.deadline) || 0) <= 3)) return 'bg-vermelho';
-    if (dayOrders.some(o => !o.completed && !o.isPartnership && (getDaysRemaining(o.deadline) || 0) <= 7)) return 'bg-amarelo';
+    if (dayOrders.some(o => !o.completed && !o.isPartnership && (getDaysRemaining(o.deadline) || 0) <= 5)) return 'bg-amarelo';
     if (dayOrders.some(o => o.isPartnership)) return 'bg-cinza';
     return 'bg-verde';
   };
@@ -1625,7 +1625,7 @@ function OrderCard({
     if (days < 0) return { text: `${Math.abs(days)}d atrasado`, class: 'bg-vermelho text-white' };
     if (days === 0) return { text: 'hoje!', class: 'bg-vermelho/10 text-vermelho' };
     if (days <= 3) return { text: `${days}d restantes`, class: 'bg-vermelho/10 text-vermelho' };
-    if (days <= 7) return { text: `${days}d restantes`, class: 'bg-amarelo/10 text-amarelo' };
+    if (days <= 5) return { text: `${days}d restantes`, class: 'bg-amarelo/10 text-amarelo' };
     return { text: `${days}d restantes`, class: 'bg-verde/10 text-verde' };
   };
 
