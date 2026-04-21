@@ -383,7 +383,19 @@ export default function App() {
   };
 
   const confirmDelete = async () => {
-    // ... logic for orders ...
+    if (deletingOrderId) {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', deletingOrderId);
+        
+      if (!error) {
+        setOrders(prev => prev.filter(o => o.id !== deletingOrderId));
+        setDeletingOrderId(null);
+      } else {
+        console.error('Error deleting order:', error);
+      }
+    }
   };
 
   const addInventoryItem = async (newItem: Omit<InventoryItem, 'id'>) => {
@@ -433,20 +445,6 @@ export default function App() {
     }
   };
 
-    if (deletingOrderId) {
-      const { error } = await supabase
-        .from('orders')
-        .delete()
-        .eq('id', deletingOrderId);
-        
-      if (!error) {
-        setOrders(prev => prev.filter(o => o.id !== deletingOrderId));
-        setDeletingOrderId(null);
-      } else {
-        console.error('Error deleting order:', error);
-      }
-    }
-  };
 
   const generatePDF = () => {
     const doc = new jsPDF();
@@ -610,6 +608,7 @@ export default function App() {
                 </div>
               </div>
 
+              <nav className="flex-1 p-4 space-y-2 mt-4">
                 <button 
                   onClick={() => {
                     setIsInventoryOpen(true);
@@ -1098,8 +1097,6 @@ export default function App() {
             onDelete={deleteInventoryItem}
           />
         )}
-      </AnimatePresence>
-
       </AnimatePresence>
     </div>
   );
