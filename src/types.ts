@@ -12,6 +12,7 @@ export interface Order {
 export interface PaymentInfo {
   totalValue: string;
   type: 'pix' | 'card' | null;
+  pixEntryAmount?: string;
   pixEntryPaid: boolean;
   pixRemainingPaid: boolean;
   cardInstallments: number;

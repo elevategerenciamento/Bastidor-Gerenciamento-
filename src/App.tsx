@@ -151,27 +151,31 @@ export default function App() {
       }
 
       if (o.payment.type === 'pix') {
-        const half = value * 0.5;
+        const totalValueNum = value;
+        const entryAmnt = parseFloat(o.payment.pixEntryAmount?.replace(',', '.') || '0') || (totalValueNum * 0.5);
+        const remainingAmnt = totalValueNum - entryAmnt;
+        const entryPct = totalValueNum > 0 ? Math.round((entryAmnt / totalValueNum) * 100) : 0;
+
         if (o.payment.pixEntryPaid) {
-          totalReceived += half;
+          totalReceived += entryAmnt;
           receivedCount++;
-          receivedPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: half, label: 'Entrada 50%', type: 'pix' });
-          if (month !== null && monthlyTotals[month]) monthlyTotals[month].received += half;
-        } else if (value > 0) {
-          totalPending += half;
+          receivedPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: entryAmnt, label: `Entrada ${entryPct}%`, type: 'pix' });
+          if (month !== null && monthlyTotals[month]) monthlyTotals[month].received += entryAmnt;
+        } else if (totalValueNum > 0) {
+          totalPending += entryAmnt;
           pendingCount++;
-          pendingPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: half, label: 'Entrada 50%', type: 'pix' });
+          pendingPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: entryAmnt, label: `Entrada ${entryPct}%`, type: 'pix' });
         }
         
         if (o.payment.pixRemainingPaid) {
-          totalReceived += half;
+          totalReceived += remainingAmnt;
           receivedCount++;
-          receivedPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: half, label: 'Restante 50%', type: 'pix' });
-          if (month !== null && monthlyTotals[month]) monthlyTotals[month].received += half;
-        } else if (value > 0) {
-          totalPending += half;
+          receivedPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: remainingAmnt, label: `Restante ${100-entryPct}%`, type: 'pix' });
+          if (month !== null && monthlyTotals[month]) monthlyTotals[month].received += remainingAmnt;
+        } else if (totalValueNum > 0) {
+          totalPending += remainingAmnt;
           pendingCount++;
-          pendingPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: half, label: 'Restante 50%', type: 'pix' });
+          pendingPayments.push({ customerName: o.customerName, piece: o.pieceDescription, amount: remainingAmnt, label: `Restante ${100-entryPct}%`, type: 'pix' });
         }
       } else if (o.payment.type === 'card') {
         if (o.payment.cardPaid) {
@@ -420,13 +424,14 @@ export default function App() {
     const tableData: any[] = [];
     
     monthOrders.forEach(o => {
-      const value = parseFloat(o.payment.totalValue.replace(',', '.')) || 0;
+      const totalValue = parseFloat(o.payment.totalValue.replace(',', '.')) || 0;
       if (o.payment.type === 'pix') {
-        const half = value * 0.5;
-        if (o.payment.pixEntryPaid) tableData.push([o.customerName, o.pieceDescription, 'PIX (Entrada)', formatCurrency(half)]);
-        if (o.payment.pixRemainingPaid) tableData.push([o.customerName, o.pieceDescription, 'PIX (Restante)', formatCurrency(half)]);
+        const entry = parseFloat(o.payment.pixEntryAmount?.replace(',', '.') || '0') || (totalValue * 0.5);
+        const remaining = totalValue - entry;
+        if (o.payment.pixEntryPaid) tableData.push([o.customerName, o.pieceDescription, 'PIX (Entrada)', formatCurrency(entry)]);
+        if (o.payment.pixRemainingPaid) tableData.push([o.customerName, o.pieceDescription, 'PIX (Restante)', formatCurrency(remaining)]);
       } else if (o.payment.type === 'card' && o.payment.cardPaid) {
-        tableData.push([o.customerName, o.pieceDescription, 'Cartão', formatCurrency(value)]);
+        tableData.push([o.customerName, o.pieceDescription, 'Cartão', formatCurrency(totalValue)]);
       }
     });
     
@@ -1314,6 +1319,16 @@ function AddOrderModal({
   const [date, setDate] = useState(orderToEdit?.deadline ? orderToEdit.deadline.toISOString().split('T')[0] : '');
   const [isPartnership, setIsPartnership] = useState(orderToEdit?.isPartnership || false);
   const [value, setValue] = useState(orderToEdit?.payment.totalValue || '');
+  const [entryAmount, setEntryAmount] = useState(orderToEdit?.payment.pixEntryAmount || '');
+
+  const entryPercentage = useMemo(() => {
+    const total = parseFloat(value.replace(',', '.')) || 0;
+    const entry = parseFloat(entryAmount.replace(',', '.')) || 0;
+    if (total > 0 && entry > 0) {
+      return Math.round((entry / total) * 100);
+    }
+    return 0;
+  }, [value, entryAmount]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1325,9 +1340,10 @@ function AddOrderModal({
       notes,
       deadline: date ? new Date(date + 'T12:00:00') : null,
       isPartnership,
-      payment: orderToEdit ? { ...orderToEdit.payment, totalValue: value } : {
+      payment: orderToEdit ? { ...orderToEdit.payment, totalValue: value, pixEntryAmount: entryAmount } : {
         totalValue: value,
         type: null,
+        pixEntryAmount: entryAmount,
         pixEntryPaid: false,
         pixRemainingPaid: false,
         cardInstallments: 1,
@@ -1443,6 +1459,30 @@ function AddOrderModal({
                     placeholder="0,00"
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center px-1">
+                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider">Valor de Entrada (PIX)</label>
+                {entryPercentage > 0 && (
+                  <span className="text-[10px] font-black text-vinho bg-rosa/20 px-2 py-0.5 rounded-full">
+                    {entryPercentage}% do total
+                  </span>
+                )}
+              </div>
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">OPCIONAL</div>
+                <input 
+                  type="text" 
+                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-20 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
+                  value={entryAmount}
+                  onChange={e => setEntryAmount(e.target.value)}
+                  placeholder="Quanto você já recebeu?"
+                />
               </div>
             </div>
           </div>
@@ -1725,38 +1765,49 @@ function OrderCard({
 
           {order.payment.type === 'pix' && (
             <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
-              <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-creme">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${order.payment.pixEntryPaid ? 'bg-verde/10 text-verde' : 'bg-amarelo/10 text-amarelo'}`}>
-                    {order.payment.pixEntryPaid ? '✓ Entrada' : 'Entrada 50%'}
-                  </span>
-                  <span className="text-xs font-bold text-vinho">
-                    {formatCurrency(parseFloat(order.payment.totalValue.replace(',', '.')) * 0.5 || 0)}
-                  </span>
-                </div>
-                <button 
-                  onClick={() => onUpdatePayment({ pixEntryPaid: !order.payment.pixEntryPaid })}
-                  className={`text-[9px] font-bold px-3 py-1 rounded-full border transition-all ${order.payment.pixEntryPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
-                >
-                  {order.payment.pixEntryPaid ? '✓ Recebido' : 'Marcar recebido'}
-                </button>
-              </div>
-              <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-creme">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${order.payment.pixRemainingPaid ? 'bg-verde/10 text-verde' : 'bg-vermelho/10 text-vermelho'}`}>
-                    {order.payment.pixRemainingPaid ? '✓ Restante' : 'Restante 50%'}
-                  </span>
-                  <span className="text-xs font-bold text-vinho">
-                    {formatCurrency(parseFloat(order.payment.totalValue.replace(',', '.')) * 0.5 || 0)}
-                  </span>
-                </div>
-                <button 
-                  onClick={() => onUpdatePayment({ pixRemainingPaid: !order.payment.pixRemainingPaid })}
-                  className={`text-[9px] font-bold px-3 py-1 rounded-full border transition-all ${order.payment.pixRemainingPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
-                >
-                  {order.payment.pixRemainingPaid ? '✓ Recebido' : 'Marcar recebido'}
-                </button>
-              </div>
+              {(() => {
+                const total = parseFloat(order.payment.totalValue.replace(',', '.')) || 0;
+                const entry = parseFloat(order.payment.pixEntryAmount?.replace(',', '.') || '0') || (total * 0.5);
+                const remaining = total - entry;
+                const entryPct = total > 0 ? Math.round((entry / total) * 100) : 0;
+                
+                return (
+                  <>
+                    <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-creme">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${order.payment.pixEntryPaid ? 'bg-verde/10 text-verde' : 'bg-amarelo/10 text-amarelo'}`}>
+                          {order.payment.pixEntryPaid ? '✓ Entrada' : `Entrada ${entryPct}%`}
+                        </span>
+                        <span className="text-xs font-bold text-vinho">
+                          {formatCurrency(entry)}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => onUpdatePayment({ pixEntryPaid: !order.payment.pixEntryPaid })}
+                        className={`text-[9px] font-bold px-3 py-1 rounded-full border transition-all ${order.payment.pixEntryPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
+                      >
+                        {order.payment.pixEntryPaid ? '✓ Recebido' : 'Marcar recebido'}
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-creme">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${order.payment.pixRemainingPaid ? 'bg-verde/10 text-verde' : 'bg-vermelho/10 text-vermelho'}`}>
+                          {order.payment.pixRemainingPaid ? '✓ Restante' : `Restante ${100 - entryPct}%`}
+                        </span>
+                        <span className="text-xs font-bold text-vinho">
+                          {formatCurrency(remaining)}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => onUpdatePayment({ pixRemainingPaid: !order.payment.pixRemainingPaid })}
+                        className={`text-[9px] font-bold px-3 py-1 rounded-full border transition-all ${order.payment.pixRemainingPaid ? 'bg-verde border-verde text-white' : 'border-verde text-verde hover:bg-verde/5'}`}
+                      >
+                        {order.payment.pixRemainingPaid ? '✓ Recebido' : 'Marcar recebido'}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
 

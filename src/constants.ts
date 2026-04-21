@@ -11,7 +11,7 @@ export const INITIAL_ORDERS: Order[] = [
     deadline: new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + 2), 
     isPartnership: false, 
     completed: false,
-    payment: { totalValue: '150,00', type: 'pix', pixEntryPaid: true, pixRemainingPaid: false, cardInstallments: 1, cardPaid: false }
+    payment: { totalValue: '150,00', type: 'pix', pixEntryAmount: '75,00', pixEntryPaid: true, pixRemainingPaid: false, cardInstallments: 1, cardPaid: false }
   },
   { 
     id: 2, 
@@ -21,7 +21,7 @@ export const INITIAL_ORDERS: Order[] = [
     deadline: new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + 5), 
     isPartnership: false, 
     completed: false,
-    payment: { totalValue: '280,00', type: 'pix', pixEntryPaid: true, pixRemainingPaid: true, cardInstallments: 1, cardPaid: false }
+    payment: { totalValue: '280,00', type: 'pix', pixEntryAmount: '140,00', pixEntryPaid: true, pixRemainingPaid: true, cardInstallments: 1, cardPaid: false }
   },
   { 
     id: 3, 
@@ -30,7 +30,7 @@ export const INITIAL_ORDERS: Order[] = [
     deadline: new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + 10), 
     isPartnership: false, 
     completed: false,
-    payment: { totalValue: '200,00', type: 'card', pixEntryPaid: false, pixRemainingPaid: false, cardInstallments: 2, cardPaid: true }
+    payment: { totalValue: '200,00', type: 'card', pixEntryAmount: '', pixEntryPaid: false, pixRemainingPaid: false, cardInstallments: 2, cardPaid: true }
   },
   { 
     id: 4, 
@@ -39,6 +39,6 @@ export const INITIAL_ORDERS: Order[] = [
     deadline: new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 5), 
     isPartnership: false, 
     completed: false,
-    payment: { totalValue: '', type: null, pixEntryPaid: false, pixRemainingPaid: false, cardInstallments: 2, cardPaid: false }
+    payment: { totalValue: '', type: null, pixEntryAmount: '', pixEntryPaid: false, pixRemainingPaid: false, cardInstallments: 2, cardPaid: false }
   },
 ];
