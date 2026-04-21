@@ -51,6 +51,7 @@ export default function App() {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchOrders();
+        fetchInventory();
       } else {
         setLoading(false);
       }
@@ -429,6 +430,7 @@ export default function App() {
       }, ...prev]);
     } else if (error) {
       console.error('Error adding inventory item:', error);
+      alert('Erro ao salvar no estoque: ' + error.message);
     }
   };
 
@@ -442,6 +444,7 @@ export default function App() {
       setInventory(prev => prev.filter(item => item.id !== id));
     } else {
       console.error('Error deleting inventory item:', error);
+      alert('Erro ao excluir do estoque: ' + error.message);
     }
   };
 
