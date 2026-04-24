@@ -140,6 +140,24 @@ export default function App() {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [isCustomRange, setIsCustomRange] = useState(false);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const reportMonths = useMemo(() => {
+    const cur = TODAY.getMonth();
+    const yr = TODAY.getFullYear();
+    const months = [];
+    for (let i = 2; i >= 0; i--) {
+      const d = new Date(yr, cur - i, 1);
+      months.push({ 
+        name: new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(d),
+        val: d.getMonth(),
+        year: d.getFullYear()
+      });
+    }
+    return months;
+  }, []);
 
 
   const months = useMemo(() => {
@@ -448,7 +466,23 @@ export default function App() {
 
   const generatePDF = () => {
     const doc = new jsPDF();
-    const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(TODAY.getFullYear(), reportMonth));
+    let reportTitle = '';
+    let filteredOrders = [];
+    let periodLabel = '';
+
+    if (isCustomRange && startDate && endDate) {
+      const start = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T23:59:59');
+      periodLabel = `${start.toLocaleDateString('pt-BR')} a ${end.toLocaleDateString('pt-BR')}`;
+      reportTitle = `Relatório Personalizado`;
+      filteredOrders = orders.filter(o => o.deadline && o.deadline >= start && o.deadline <= end && !o.isPartnership);
+    } else {
+      const monthDate = new Date(TODAY.getFullYear(), reportMonth);
+      const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(monthDate);
+      periodLabel = `${monthName} ${TODAY.getFullYear()}`;
+      reportTitle = `Relatório Financeiro`;
+      filteredOrders = orders.filter(o => o.deadline && o.deadline.getMonth() === reportMonth && o.deadline.getFullYear() === TODAY.getFullYear() && !o.isPartnership);
+    }
     
     // Header
     doc.setFillColor(74, 55, 40); // Marrom Profundo
@@ -482,11 +516,25 @@ export default function App() {
     
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(11);
-    doc.text(`Relatório Financeiro • ${monthName} ${TODAY.getFullYear()}`, 105, 46, { align: 'center' });
+    doc.text(`${reportTitle} • ${periodLabel}`, 105, 46, { align: 'center' });
     
     // Summary Section
-    const monthStats = stats.monthlyTotals[reportMonth] || { total: 0, received: 0 };
-    const pending = monthStats.total - monthStats.received;
+    const statsForReport = filteredOrders.reduce((acc, o) => {
+      const value = parseFloat(o.payment.totalValue.replace(',', '.')) || 0;
+      acc.total += value;
+      if (o.payment.type === 'pix') {
+        const totalValueNum = value;
+        const entryAmnt = parseFloat(o.payment.pixEntryAmount?.replace(',', '.') || '0') || (totalValueNum * 0.5);
+        const remainingAmnt = totalValueNum - entryAmnt;
+        if (o.payment.pixEntryPaid) acc.received += entryAmnt;
+        if (o.payment.pixRemainingPaid) acc.received += remainingAmnt;
+      } else if (o.payment.type === 'card' && o.payment.cardPaid) {
+        acc.received += value;
+      }
+      return acc;
+    }, { total: 0, received: 0 });
+
+    const pending = statsForReport.total - statsForReport.received;
     
     doc.setTextColor(74, 55, 40);
     doc.setFontSize(14);
@@ -496,8 +544,8 @@ export default function App() {
       startY: 65,
       head: [['Descrição', 'Valor']],
       body: [
-        ['Total em Encomendas', formatCurrency(monthStats.total)],
-        ['Total Recebido', formatCurrency(monthStats.received)],
+        ['Total em Encomendas', formatCurrency(statsForReport.total)],
+        ['Total Recebido', formatCurrency(statsForReport.received)],
         ['Total a Receber', formatCurrency(pending)],
       ],
       headStyles: { fillColor: [74, 55, 40] },
@@ -508,10 +556,9 @@ export default function App() {
     doc.setFontSize(16);
     doc.text('Detalhamento de Recebidos', 14, (doc as any).lastAutoTable.finalY + 15);
     
-    const monthOrders = orders.filter(o => o.deadline && o.deadline.getMonth() === reportMonth && !o.isPartnership);
     const tableData: any[] = [];
     
-    monthOrders.forEach(o => {
+    filteredOrders.forEach(o => {
       const totalValue = parseFloat(o.payment.totalValue.replace(',', '.')) || 0;
       if (o.payment.type === 'pix') {
         const entry = parseFloat(o.payment.pixEntryAmount?.replace(',', '.') || '0') || (totalValue * 0.5);
@@ -540,7 +587,7 @@ export default function App() {
       doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} - Página ${i} de ${pageCount}`, 105, 285, { align: 'center' });
     }
     
-    doc.save(`Relatorio_Bastidor_${monthName}_2026.pdf`);
+    doc.save(`Relatorio_Bastidor_${periodLabel.replace(/ /g, '_')}.pdf`);
   };
   const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(TODAY.getFullYear(), reportMonth));
 
@@ -826,40 +873,96 @@ export default function App() {
 
         {/* Report Section */}
         <section className="space-y-4">
-          <div className="flex items-center gap-2 border-b border-rosa pb-2">
-            <FileText className="w-5 h-5 text-vinho" />
-            <h2 className="text-xl font-serif text-vinho">Relatórios Mensais</h2>
+          <div className="flex items-center justify-between border-b border-rosa pb-2">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-vinho" />
+              <h2 className="text-xl font-serif text-vinho">Relatórios Mensais</h2>
+            </div>
+            {!isCustomRange && (
+               <span className="text-[10px] font-black text-rosa uppercase tracking-widest bg-rosa/10 px-2 py-0.5 rounded">
+                 {new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(2026, reportMonth))}
+               </span>
+            )}
           </div>
           
-          <div className="bg-white p-6 rounded-[32px] border-2 border-rosa shadow-sm flex flex-col sm:flex-row items-center gap-6">
-            <div className="flex-1 w-full">
-              <label className="block text-[10px] font-bold text-cinza uppercase mb-2">Selecione o Mês</label>
-              <div className="flex flex-wrap gap-2">
-                {months.map(m => (
-                  <button
-                    key={m.month}
-                    onClick={() => setReportMonth(m.month)}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border-2 ${
-                      reportMonth === m.month 
-                      ? 'bg-vinho border-vinho text-creme' 
-                      : 'bg-white border-rosa text-vinho hover:bg-rosa/10'
-                    }`}
-                  >
-                    {new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(m.year, m.month))}
-                  </button>
-                ))}
-              </div>
+          <div className="bg-white p-6 rounded-[40px] border-2 border-rosa shadow-sm space-y-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {reportMonths.map(m => (
+                <button
+                  key={`${m.val}-${m.year}`}
+                  onClick={() => {
+                    setReportMonth(m.val);
+                    setIsCustomRange(false);
+                  }}
+                  className={`py-4 px-3 rounded-2xl text-xs font-black transition-all border-2 uppercase tracking-tighter ${
+                    !isCustomRange && reportMonth === m.val 
+                    ? 'bg-vinho border-vinho text-creme shadow-lg scale-105' 
+                    : 'bg-white border-rosa/30 text-vinho/60 hover:border-vinho hover:text-vinho'
+                  }`}
+                >
+                  {m.name.substring(0, 3)}
+                </button>
+              ))}
+              <button
+                onClick={() => setIsCustomRange(true)}
+                className={`py-4 px-3 rounded-2xl text-xs font-black transition-all border-2 uppercase tracking-tighter flex items-center justify-center gap-2 ${
+                  isCustomRange 
+                  ? 'bg-dourado border-dourado text-white shadow-lg scale-105' 
+                  : 'bg-white border-rosa/30 text-vinho/60 hover:border-vinho hover:text-vinho'
+                }`}
+              >
+                <Sparkles className="w-3 h-3" />
+                Personalizado
+              </button>
             </div>
+
+            <AnimatePresence mode="wait">
+              {isCustomRange && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="bg-creme/50 p-6 rounded-3xl border-2 border-dashed border-rosa/50 space-y-4"
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-cinza uppercase tracking-widest ml-1">Início do Período</label>
+                      <input 
+                        type="date" 
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full bg-white border-2 border-rosa/30 rounded-xl px-4 py-3 text-sm font-bold text-vinho outline-none focus:border-vinho transition-all shadow-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-cinza uppercase tracking-widest ml-1">Fim do Período</label>
+                      <input 
+                        type="date" 
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full bg-white border-2 border-rosa/30 rounded-xl px-4 py-3 text-sm font-bold text-vinho outline-none focus:border-vinho transition-all shadow-sm"
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={generatePDF}
-              className="w-full sm:w-auto bg-dourado text-white px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-3 shadow-lg hover:bg-opacity-90 transition-all"
-            >
-              <Download className="w-5 h-5" />
-              GERAR PDF
-            </motion.button>
+            <div className="pt-2">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={generatePDF}
+                disabled={isCustomRange && (!startDate || !endDate)}
+                className="w-full bg-vinho text-creme py-5 rounded-[24px] font-black text-sm flex items-center justify-center gap-3 shadow-xl hover:bg-opacity-90 transition-all uppercase tracking-[2px] disabled:opacity-50 disabled:scale-100"
+              >
+                <Download className="w-5 h-5" />
+                GERAR PDF DETALHADO
+              </motion.button>
+              <p className="text-center text-[10px] text-cinza font-bold uppercase tracking-widest mt-4 opacity-40">
+                ✦ {isCustomRange ? 'Relatório por período personalizado' : 'Relatório consolidado do mês selecionado'} ✦
+              </p>
+            </div>
           </div>
         </section>
 
