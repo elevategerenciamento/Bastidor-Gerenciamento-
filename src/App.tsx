@@ -145,11 +145,11 @@ export default function App() {
   const months = useMemo(() => {
     const currentMonth = TODAY.getMonth();
     const currentYear = TODAY.getFullYear();
-    return [
-      { month: currentMonth, year: currentYear },
-      { month: (currentMonth + 1) % 12, year: currentMonth + 1 > 11 ? currentYear + 1 : currentYear },
-      { month: (currentMonth + 2) % 12, year: currentMonth + 2 > 11 ? currentYear + 1 : currentYear },
-    ];
+    const arr = [];
+    for (let m = currentMonth; m <= 11; m++) {
+      arr.push({ month: m, year: currentYear });
+    }
+    return arr;
   }, []);
 
   // Derived Stats
@@ -165,11 +165,10 @@ export default function App() {
     let receivedCount = 0;
     let pendingCount = 0;
 
-    const monthlyTotals: Record<number, { total: number; received: number }> = {
-      3: { total: 0, received: 0 },
-      4: { total: 0, received: 0 },
-      5: { total: 0, received: 0 },
-    };
+    const monthlyTotals: Record<number, { total: number; received: number }> = {};
+    months.forEach(m => {
+      monthlyTotals[m.month] = { total: 0, received: 0 };
+    });
 
     const receivedPayments: any[] = [];
     const pendingPayments: any[] = [];
@@ -758,13 +757,11 @@ export default function App() {
 
 
           <div className="grid grid-cols-3 gap-2">
-            {[
-              { name: 'Abril', month: 3 },
-              { name: 'Maio', month: 4 },
-              { name: 'Junho', month: 5 }
-            ].map(m => (
+            {months.map(m => (
               <div key={m.month} className="bg-white p-3 rounded-xl text-center shadow-sm border border-creme">
-                <div className="text-[10px] text-cinza uppercase tracking-wider">{m.name}</div>
+                <div className="text-[10px] text-cinza uppercase tracking-wider">
+                  {new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(m.year, m.month))}
+                </div>
                 <div className="text-sm font-bold text-vinho mt-1">{formatCurrency(stats.monthlyTotals[m.month].total)}</div>
                 {stats.monthlyTotals[m.month].received > 0 && (
                   <div className="text-[9px] text-verde mt-1 font-medium">
@@ -837,22 +834,18 @@ export default function App() {
           <div className="bg-white p-6 rounded-[32px] border-2 border-rosa shadow-sm flex flex-col sm:flex-row items-center gap-6">
             <div className="flex-1 w-full">
               <label className="block text-[10px] font-bold text-cinza uppercase mb-2">Selecione o Mês</label>
-              <div className="flex gap-2">
-                {[
-                  { name: 'Abril', val: 3 },
-                  { name: 'Maio', val: 4 },
-                  { name: 'Junho', val: 5 }
-                ].map(m => (
+              <div className="flex flex-wrap gap-2">
+                {months.map(m => (
                   <button
-                    key={m.val}
-                    onClick={() => setReportMonth(m.val)}
-                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all border-2 ${
-                      reportMonth === m.val 
+                    key={m.month}
+                    onClick={() => setReportMonth(m.month)}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border-2 ${
+                      reportMonth === m.month 
                       ? 'bg-vinho border-vinho text-creme' 
                       : 'bg-white border-rosa text-vinho hover:bg-rosa/10'
                     }`}
                   >
-                    {m.name}
+                    {new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(m.year, m.month))}
                   </button>
                 ))}
               </div>
