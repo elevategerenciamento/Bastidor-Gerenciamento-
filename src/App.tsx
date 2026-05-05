@@ -463,25 +463,66 @@ export default function App() {
     }
   };
 
+  const updateInventoryItem = async (id: string, updatedItem: Omit<InventoryItem, 'id'>) => {
+    const { error } = await supabase
+      .from('inventory')
+      .update({
+        name: updatedItem.name,
+        category: updatedItem.category,
+        quantity: updatedItem.quantity,
+        price: parseFloat(updatedItem.price.replace(',', '.')) || 0,
+        purchase_date: updatedItem.purchaseDate.toISOString(),
+        payment_method: updatedItem.paymentMethod,
+        installments: updatedItem.installments || 1
+      })
+      .eq('id', id);
+      
+    if (!error) {
+      setInventory(prev => prev.map(item => item.id === id ? {
+        id,
+        name: updatedItem.name,
+        category: updatedItem.category,
+        quantity: updatedItem.quantity,
+        price: updatedItem.price,
+        purchaseDate: updatedItem.purchaseDate,
+        paymentMethod: updatedItem.paymentMethod,
+        installments: updatedItem.installments
+      } : item));
+    } else {
+      console.error('Error updating inventory item:', error);
+    }
+  };
+
 
   const generatePDF = () => {
     const doc = new jsPDF();
     let reportTitle = '';
-    let filteredOrders = [];
+    let filteredOrders: Order[] = [];
+    let filteredInventory: InventoryItem[] = [];
     let periodLabel = '';
 
     if (isCustomRange && startDate && endDate) {
-      const start = new Date(startDate + 'T00:00:00');
-      const end = new Date(endDate + 'T23:59:59');
+      const startParts = startDate.split('-');
+      const start = new Date(parseInt(startParts[0]), parseInt(startParts[1]) - 1, parseInt(startParts[2]), 0, 0, 0);
+      const endParts = endDate.split('-');
+      const end = new Date(parseInt(endParts[0]), parseInt(endParts[1]) - 1, parseInt(endParts[2]), 23, 59, 59);
+      
       periodLabel = `${start.toLocaleDateString('pt-BR')} a ${end.toLocaleDateString('pt-BR')}`;
       reportTitle = `Relatório Personalizado`;
+      
       filteredOrders = orders.filter(o => o.deadline && o.deadline >= start && o.deadline <= end && !o.isPartnership);
+      filteredInventory = inventory.filter(i => i.purchaseDate >= start && i.purchaseDate <= end);
     } else {
-      const monthDate = new Date(TODAY.getFullYear(), reportMonth);
+      const monthDate = new Date(TODAY.getFullYear(), reportMonth, 1);
       const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(monthDate);
       periodLabel = `${monthName} ${TODAY.getFullYear()}`;
       reportTitle = `Relatório Financeiro`;
-      filteredOrders = orders.filter(o => o.deadline && o.deadline.getMonth() === reportMonth && o.deadline.getFullYear() === TODAY.getFullYear() && !o.isPartnership);
+      
+      const start = new Date(TODAY.getFullYear(), reportMonth, 1, 0, 0, 0);
+      const end = new Date(TODAY.getFullYear(), reportMonth + 1, 0, 23, 59, 59);
+
+      filteredOrders = orders.filter(o => o.deadline && o.deadline >= start && o.deadline <= end && !o.isPartnership);
+      filteredInventory = inventory.filter(i => i.purchaseDate >= start && i.purchaseDate <= end);
     }
     
     // Header
@@ -534,11 +575,13 @@ export default function App() {
       return acc;
     }, { total: 0, received: 0 });
 
+    const totalGastos = filteredInventory.reduce((sum, item) => sum + (parseFloat(item.price.replace(',', '.')) || 0), 0);
     const pending = statsForReport.total - statsForReport.received;
+    const caixa = statsForReport.received - totalGastos;
     
     doc.setTextColor(74, 55, 40);
     doc.setFontSize(14);
-    doc.text('Resumo do Mês', 14, 60);
+    doc.text('Resumo do Período', 14, 60);
     
     autoTable(doc, {
       startY: 65,
@@ -547,6 +590,8 @@ export default function App() {
         ['Total em Encomendas', formatCurrency(statsForReport.total)],
         ['Total Recebido', formatCurrency(statsForReport.received)],
         ['Total a Receber', formatCurrency(pending)],
+        ['Gastos Totais', formatCurrency(totalGastos)],
+        ['Caixa (Recebido - Gastos)', formatCurrency(caixa)],
       ],
       headStyles: { fillColor: [74, 55, 40] },
       margin: { left: 14, right: 14 },
@@ -577,6 +622,30 @@ export default function App() {
       headStyles: { fillColor: [74, 55, 40] },
       margin: { left: 14, right: 14 },
     });
+
+    // Detailed Gastos
+    const gastosData: any[] = [];
+    filteredInventory.forEach(item => {
+      gastosData.push([
+        item.name, 
+        item.category, 
+        item.paymentMethod === 'cash' ? 'À Vista' : item.paymentMethod === 'pix' ? 'PIX' : 'Cartão', 
+        formatCurrency(parseFloat(item.price.replace(',', '.')) || 0)
+      ]);
+    });
+
+    if (gastosData.length > 0) {
+      doc.setFontSize(16);
+      doc.text('Detalhamento de Gastos', 14, (doc as any).lastAutoTable.finalY + 15);
+      
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 20,
+        head: [['Item', 'Categoria', 'Pagamento', 'Valor']],
+        body: gastosData,
+        headStyles: { fillColor: [166, 93, 71] },
+        margin: { left: 14, right: 14 },
+      });
+    }
     
     // Footer
     const pageCount = (doc as any).internal.getNumberOfPages();
@@ -742,7 +811,7 @@ export default function App() {
             <div className="text-[10px] text-cinza font-black uppercase tracking-widest">{monthName}</div>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <motion.button 
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -783,7 +852,7 @@ export default function App() {
 
             <motion.div 
               whileHover={{ scale: 1.01 }}
-              className="p-5 rounded-3xl bg-creme border-2 border-rosa/50 shadow-sm flex flex-col justify-between min-h-[140px] sm:col-span-2 lg:col-span-1"
+              className="p-5 rounded-3xl bg-creme border-2 border-rosa/50 shadow-sm flex flex-col justify-between min-h-[140px]"
             >
               <div className="flex justify-between items-start mb-4">
                 <div className="bg-vermelho/10 w-10 h-10 rounded-2xl flex items-center justify-center">
@@ -798,6 +867,22 @@ export default function App() {
                 <div className="text-[10px] uppercase font-black tracking-widest text-cinza mb-1">Gastos Totais</div>
                 <div className="text-2xl font-serif font-black text-vermelho">{formatCurrency(stats.totalInventoryExpenses)}</div>
                 <div className="text-[10px] text-cinza opacity-40 font-bold mt-1 lowercase">deduzido do balanço geral</div>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              whileHover={{ scale: 1.01 }}
+              className="p-5 rounded-3xl bg-verde/10 border-2 border-verde/30 shadow-sm flex flex-col justify-between min-h-[140px]"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="bg-verde/20 w-10 h-10 rounded-2xl flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-verde" />
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase font-black tracking-widest text-cinza mb-1">Caixa</div>
+                <div className="text-2xl font-serif font-black text-verde">{formatCurrency(stats.totalReceived - stats.totalInventoryExpenses)}</div>
+                <div className="text-[10px] text-cinza opacity-60 font-bold mt-1 lowercase">recebido - gastos</div>
               </div>
             </motion.div>
           </div>
@@ -1200,6 +1285,7 @@ export default function App() {
             items={inventory}
             onClose={() => setIsInventoryOpen(false)}
             onAdd={addInventoryItem}
+            onUpdate={updateInventoryItem}
             onDelete={deleteInventoryItem}
           />
         )}
@@ -2077,14 +2163,17 @@ function InventoryModal({
   items, 
   onClose,
   onAdd,
+  onUpdate,
   onDelete
 }: { 
   items: InventoryItem[]; 
   onClose: () => void;
   onAdd: (item: Omit<InventoryItem, 'id'>) => void;
+  onUpdate: (id: string, updatedItem: Omit<InventoryItem, 'id'>) => void;
   onDelete: (id: string) => void;
 }) {
   const [isAddingItem, setIsAddingItem] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
 
   return (
     <motion.div 
@@ -2156,12 +2245,20 @@ function InventoryModal({
                         {item.paymentMethod === 'cash' ? 'À Vista' : item.paymentMethod === 'pix' ? 'PIX' : `Cartão ${item.installments}x`}
                       </div>
                     </div>
-                    <button 
-                      onClick={() => onDelete(item.id)}
-                      className="p-3 text-vermelho hover:bg-vermelho/5 rounded-2xl transition-all border border-vermelho/10 sm:border-none"
-                    >
-                      <Trash2 className="w-6 h-6" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setEditingItem(item)}
+                        className="p-3 text-cinza hover:text-vinho hover:bg-creme rounded-2xl transition-all border border-cinza/10 sm:border-none"
+                      >
+                        <Edit className="w-6 h-6" />
+                      </button>
+                      <button 
+                        onClick={() => onDelete(item.id)}
+                        className="p-3 text-vermelho hover:bg-vermelho/5 rounded-2xl transition-all border border-vermelho/10 sm:border-none"
+                      >
+                        <Trash2 className="w-6 h-6" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -2184,6 +2281,16 @@ function InventoryModal({
               }}
             />
           )}
+          {editingItem && (
+            <AddInventoryModal 
+              itemToEdit={editingItem}
+              onClose={() => setEditingItem(null)}
+              onAdd={(updatedItem) => {
+                onUpdate(editingItem.id, updatedItem);
+                setEditingItem(null);
+              }}
+            />
+          )}
         </AnimatePresence>
       </motion.div>
     </motion.div>
@@ -2191,19 +2298,21 @@ function InventoryModal({
 }
 
 function AddInventoryModal({ 
+  itemToEdit,
   onClose, 
   onAdd 
 }: { 
+  itemToEdit?: InventoryItem;
   onClose: () => void; 
   onAdd: (item: Omit<InventoryItem, 'id'>) => void;
 }) {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [price, setPrice] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [method, setMethod] = useState<'cash' | 'pix' | 'card'>('pix');
-  const [installments, setInstallments] = useState(1);
+  const [name, setName] = useState(itemToEdit?.name || '');
+  const [category, setCategory] = useState(itemToEdit?.category || '');
+  const [quantity, setQuantity] = useState(itemToEdit?.quantity || '');
+  const [price, setPrice] = useState(itemToEdit?.price || '');
+  const [date, setDate] = useState(itemToEdit ? itemToEdit.purchaseDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+  const [method, setMethod] = useState<'cash' | 'pix' | 'card'>(itemToEdit?.paymentMethod || 'pix');
+  const [installments, setInstallments] = useState(itemToEdit?.installments || 1);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2234,8 +2343,8 @@ function AddInventoryModal({
         onClick={e => e.stopPropagation()}
       >
         <div className="bg-vinho p-8 text-white relative">
-          <h3 className="text-3xl font-serif font-black tracking-tight">Novo Insumo</h3>
-          <p className="text-rosa/60 text-[10px] uppercase tracking-widest font-bold mt-1">O que você comprou para o ateliê?</p>
+          <h3 className="text-3xl font-serif font-black tracking-tight">{itemToEdit ? 'Editar Insumo' : 'Novo Insumo'}</h3>
+          <p className="text-rosa/60 text-[10px] uppercase tracking-widest font-bold mt-1">{itemToEdit ? 'Atualize as informações da compra' : 'O que você comprou para o ateliê?'}</p>
           <button onClick={onClose} className="absolute top-8 right-8 p-1 hover:bg-white/10 rounded-full">
             <X className="w-6 h-6 text-rosa" />
           </button>
@@ -2338,7 +2447,7 @@ function AddInventoryModal({
             type="submit"
             className="w-full bg-dourado text-white py-5 rounded-[24px] font-black text-lg hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl uppercase tracking-widest mt-4"
           >
-            Salvar no Estoque
+            {itemToEdit ? 'Salvar Alterações' : 'Salvar no Estoque'}
           </button>
         </form>
       </motion.div>
