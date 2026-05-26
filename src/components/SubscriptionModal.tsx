@@ -5,20 +5,20 @@ import { supabase } from '../lib/supabase';
 
 const formatCpfCnpj = (value: string) => {
   const clean = value.replace(/[^\d]/g, '');
+  
   if (clean.length <= 11) {
     // CPF: 000.000.000-00
-    return clean
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    if (clean.length <= 3) return clean;
+    if (clean.length <= 6) return `${clean.slice(0, 3)}.${clean.slice(3)}`;
+    if (clean.length <= 9) return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6)}`;
+    return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9, 11)}`;
   } else {
     // CNPJ: 00.000.000/0000-00
-    return clean
-      .substring(0, 14)
-      .replace(/^(\d{2})(\d)/, '$1.$2')
-      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-      .replace(/\.(\d{3})(\d)/, '.$1/$2')
-      .replace(/(\d{4})(\d)/, '$1-$2');
+    const limited = clean.slice(0, 14);
+    if (limited.length <= 12) {
+      return `${limited.slice(0, 2)}.${limited.slice(2, 5)}.${limited.slice(5, 8)}/${limited.slice(8)}`;
+    }
+    return `${limited.slice(0, 2)}.${limited.slice(2, 5)}.${limited.slice(5, 8)}/${limited.slice(8, 12)}-${limited.slice(12, 14)}`;
   }
 };
 
@@ -236,6 +236,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                   type="text"
                   placeholder="000.000.000-00 ou 00.000.000/0000-00"
                   value={cpfCnpj}
+                  maxLength={18}
                   onChange={(e) => {
                     setCpfCnpj(formatCpfCnpj(e.target.value));
                   }}
