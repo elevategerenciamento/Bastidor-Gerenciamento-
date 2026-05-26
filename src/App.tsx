@@ -1558,7 +1558,7 @@ function DayDetailsModal({
   orders: Order[]; 
   onClose: () => void;
   onEdit: (order: Order) => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: string) => void;
 }) {
   return (
     <motion.div 
