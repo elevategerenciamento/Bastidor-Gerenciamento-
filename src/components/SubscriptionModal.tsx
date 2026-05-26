@@ -106,38 +106,38 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-vinho/60 backdrop-blur-md z-[150] flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 bg-vinho/60 backdrop-blur-md z-[150] flex items-start md:items-center justify-center p-2 sm:p-4 overflow-y-auto"
       onClick={onClose}
     >
       <motion.div 
         initial={{ scale: 0.9, opacity: 0, y: 30 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 30 }}
-        className="bg-creme max-w-4xl w-full rounded-[40px] shadow-2xl border-2 border-rosa overflow-hidden relative my-8"
+        className="bg-creme max-w-4xl w-full rounded-[24px] md:rounded-[40px] shadow-2xl border-2 border-rosa overflow-hidden relative my-2 md:my-8"
         onClick={e => e.stopPropagation()}
       >
         {/* Botão de Fechar */}
         <button 
           onClick={onClose}
-          className="absolute right-6 top-6 p-2 bg-white/10 hover:bg-vinho/10 rounded-full text-vinho transition-all z-10"
+          className="absolute right-4 top-4 md:right-6 md:top-6 p-2 bg-white/10 hover:bg-vinho/10 rounded-full text-vinho transition-all z-10"
         >
-          <X className="w-6 h-6" />
+          <X className="w-5 h-5 md:w-6 md:h-6" />
         </button>
 
-        <div className="p-8 md:p-12 space-y-8">
+        <div className="p-4 sm:p-8 md:p-12 space-y-6 md:space-y-8">
           <div className="text-center space-y-2 max-w-xl mx-auto">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-rosa/20 rounded-full text-xs font-black text-vinho uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5 text-dourado fill-dourado" /> Assinaturas Asaas
+              <Sparkles className="w-3.5 h-3.5 text-dourado fill-dourado" /> Assinaturas
             </div>
             <h2 className="text-3xl md:text-4xl font-serif font-black text-vinho lowercase">
               {isSubscribed ? 'sua assinatura ativa' : isPending ? 'pagamento pendente' : 'escolha o plano ideal para seu ateliê'}
             </h2>
             <p className="text-cinza text-sm font-medium leading-relaxed">
               {isSubscribed 
-                ? 'Gerencie seus pagamentos, altere sua periodicidade ou mude de plano através das faturas do Asaas.'
+                ? 'Gerencie seus pagamentos, altere sua periodicidade ou mude de plano através das suas faturas.'
                 : isPending
-                ? 'Identificamos que você gerou uma fatura no Asaas. Efetue o pagamento por PIX, Cartão ou Boleto para liberar o acesso.'
-                : 'Tenha seu ateliê organizado e leve com acesso a mais recursos de controle e relatórios via Asaas.'}
+                ? 'Identificamos que você gerou uma fatura de faturamento. Efetue o pagamento por PIX, Cartão ou Boleto para liberar o acesso.'
+                : 'Tenha seu ateliê organizado e leve com acesso a mais recursos de controle e relatórios.'}
             </p>
           </div>
 
@@ -149,7 +149,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
 
           {isSubscribed || isPending ? (
             /* Painel de Assinatura Ativa ou Pendente */
-            <div className="bg-white rounded-[32px] p-8 border border-rosa/30 shadow-md text-center max-w-md mx-auto space-y-6">
+            <div className="bg-white rounded-[24px] md:rounded-[32px] p-6 md:p-8 border border-rosa/30 shadow-md text-center max-w-md mx-auto space-y-6">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${isSubscribed ? 'bg-verde/10 text-verde' : 'bg-amarelo/10 text-amarelo'}`}>
                 <ShieldCheck className="w-10 h-10" />
               </div>
@@ -158,27 +158,27 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                   Plano {currentPlan === 'premium' ? 'Premium ✦' : 'Básico (Basic)'}
                 </h4>
                 <p className="text-xs text-cinza uppercase tracking-wider font-bold mt-1">
-                  Status: {isSubscribed ? 'Assinatura Ativa (Asaas)' : 'Aguardando Pagamento (Asaas)'}
+                  Status: {isSubscribed ? 'Assinatura Ativa' : 'Aguardando Pagamento'}
                 </p>
               </div>
               <p className="text-sm text-cinza font-medium px-4">
                 {isSubscribed 
-                  ? 'Você tem acesso completo aos recursos. Clique no botão abaixo para acessar o histórico de faturas e pagamentos no painel do Asaas.'
-                  : 'Sua assinatura foi registrada no Asaas. Clique no botão abaixo para abrir a fatura e escolher a forma de pagamento (PIX, Cartão ou Boleto).'}
+                  ? 'Você tem acesso completo aos recursos. Clique no botão abaixo para acessar o histórico de faturas e pagamentos no seu painel.'
+                  : 'Sua assinatura foi registrada. Clique no botão abaixo para abrir a fatura e escolher a forma de pagamento (PIX, Cartão ou Boleto).'}
               </p>
               <button
                 onClick={handleOpenInvoice}
-                className="w-full bg-vinho text-creme py-4 rounded-2xl font-black text-sm hover:bg-opacity-90 transition-all shadow-lg flex items-center justify-center gap-2 uppercase tracking-wider"
+                className="w-full bg-vinho text-creme py-3.5 md:py-4 rounded-2xl font-black text-sm hover:bg-opacity-90 transition-all shadow-lg flex items-center justify-center gap-2 uppercase tracking-wider"
               >
                 <CreditCard className="w-5 h-5" />
-                {isSubscribed ? 'Visualizar Faturas (Asaas)' : 'Pagar Fatura no Asaas'}
+                {isSubscribed ? 'Visualizar Faturas' : 'Ir para o Pagamento'}
               </button>
             </div>
           ) : (
             /* Tela de Escolha de Planos */
             <>
               {/* Campo CPF/CNPJ de faturamento */}
-              <div className="max-w-md mx-auto bg-white rounded-[24px] p-6 border border-rosa/30 shadow-md space-y-3 mb-8 text-left">
+              <div className="max-w-md mx-auto bg-white rounded-[20px] md:rounded-[24px] p-4 md:p-6 border border-rosa/30 shadow-md space-y-3 mb-6 md:mb-8 text-left">
                 <label className="block text-xs font-black text-vinho uppercase tracking-wider">
                   CPF ou CNPJ do Titular (Faturamento)
                 </label>
@@ -192,7 +192,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                   className="w-full bg-creme border-2 border-rosa/30 rounded-2xl px-4 py-3 text-sm text-vinho font-semibold placeholder:text-cinza/40 focus:outline-none focus:border-vinho transition-all"
                 />
                 <p className="text-[10px] text-cinza/70 font-medium leading-normal">
-                  * Necessário para a geração da fatura e Pix de forma segura no gateway Asaas.
+                  * Necessário para a geração de fatura e Pix de forma segura.
                 </p>
               </div>
 
@@ -221,20 +221,20 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
               </div>
 
               {/* Cards dos Planos */}
-              <div className="grid md:grid-cols-2 gap-8 mt-4">
+              <div className="grid md:grid-cols-2 gap-4 md:gap-8 mt-4">
                 {/* Plano Básico */}
                 <motion.div 
                   whileHover={{ y: -5 }}
-                  className="bg-white rounded-[32px] p-8 border border-rosa/30 shadow-md flex flex-col justify-between relative overflow-hidden"
+                  className="bg-white rounded-[24px] md:rounded-[32px] p-5 md:p-8 border border-rosa/30 shadow-md flex flex-col justify-between relative overflow-hidden"
                 >
-                  <div className="space-y-6">
+                  <div className="space-y-4 md:space-y-6">
                     <div>
                       <h3 className="text-2xl font-serif font-black text-vinho">Básico (Basic)</h3>
                       <p className="text-xs text-cinza font-medium mt-1">Para ateliês iniciantes estruturarem suas ordens.</p>
                     </div>
 
-                    <div className="py-2">
-                      <span className="text-4xl font-serif font-black text-vinho">
+                    <div className="py-1 md:py-2">
+                      <span className="text-3xl md:text-4xl font-serif font-black text-vinho">
                         {billingPeriod === 'monthly' ? 'R$ 19,90' : 'R$ 199,00'}
                       </span>
                       <span className="text-xs text-cinza font-bold">
@@ -246,7 +246,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                     </div>
 
                     {/* Vantagens */}
-                    <ul className="space-y-3 pt-2">
+                    <ul className="space-y-2 md:space-y-3 pt-1 md:pt-2">
                       <li className="flex items-start gap-3 text-xs text-cinza font-medium">
                         <div className="bg-verde/15 text-verde rounded-full p-0.5 mt-0.5"><Check className="w-3.5 h-3.5" /></div>
                         <span>Até 15 ordens de serviço (pedidos) ativas</span>
@@ -270,16 +270,16 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                     </ul>
                   </div>
 
-                  <div className="pt-8">
+                  <div className="pt-6 md:pt-8">
                     <button
                       onClick={() => handleSubscribe('basic', billingPeriod === 'monthly' ? 'month' : 'year')}
                       disabled={loadingPlan !== null}
-                      className="w-full bg-white border-2 border-rosa text-vinho py-4 rounded-2xl font-black text-sm hover:bg-rosa/15 transition-all shadow-sm flex items-center justify-center"
+                      className="w-full bg-white border-2 border-rosa text-vinho py-3 md:py-4 rounded-2xl font-black text-sm hover:bg-rosa/15 transition-all shadow-sm flex items-center justify-center"
                     >
                       {loadingPlan === `basic_${billingPeriod === 'monthly' ? 'month' : 'year'}` ? (
                         <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-vinho"></div>
                       ) : (
-                        'Assinar Básico (Asaas)'
+                        'Assinar Básico'
                       )}
                     </button>
                   </div>
@@ -288,14 +288,14 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                 {/* Plano Premium */}
                 <motion.div 
                   whileHover={{ y: -5 }}
-                  className="bg-vinho rounded-[32px] p-8 border-2 border-dourado/80 shadow-xl flex flex-col justify-between relative overflow-hidden text-creme"
+                  className="bg-vinho rounded-[24px] md:rounded-[32px] p-5 md:p-8 border-2 border-dourado/80 shadow-xl flex flex-col justify-between relative overflow-hidden text-creme"
                 >
                   {/* Tag Premium */}
                   <div className="absolute top-5 right-[-35px] bg-dourado text-white text-[9px] font-black py-1 px-10 rotate-45 uppercase tracking-widest shadow-md">
                     Premium
                   </div>
 
-                  <div className="space-y-6">
+                  <div className="space-y-4 md:space-y-6">
                     <div>
                       <div className="flex items-center gap-1 text-[10px] text-dourado uppercase tracking-widest font-black">
                         <Sparkles className="w-3 h-3 text-dourado fill-dourado" /> Recomendado
@@ -304,8 +304,8 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                       <p className="text-xs text-rosa/80 font-medium mt-1">Acesso completo e ilimitado para impulsionar seu ateliê.</p>
                     </div>
 
-                    <div className="py-2">
-                      <span className="text-4xl font-serif font-black text-creme">
+                    <div className="py-1 md:py-2">
+                      <span className="text-3xl md:text-4xl font-serif font-black text-creme">
                         {billingPeriod === 'monthly' ? 'R$ 34,90' : 'R$ 349,00'}
                       </span>
                       <span className="text-xs text-rosa/60 font-bold">
@@ -317,7 +317,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                     </div>
 
                     {/* Vantagens */}
-                    <ul className="space-y-3 pt-2">
+                    <ul className="space-y-2 md:space-y-3 pt-1 md:pt-2">
                       <li className="flex items-start gap-3 text-xs text-rosa/95 font-medium">
                         <div className="bg-dourado/20 text-dourado rounded-full p-0.5 mt-0.5"><Check className="w-3.5 h-3.5" /></div>
                         <span>Ordens de serviço (pedidos) ilimitadas</span>
@@ -341,16 +341,16 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                     </ul>
                   </div>
 
-                  <div className="pt-8">
+                  <div className="pt-6 md:pt-8">
                     <button
                       onClick={() => handleSubscribe('premium', billingPeriod === 'monthly' ? 'month' : 'year')}
                       disabled={loadingPlan !== null}
-                      className="w-full bg-dourado text-white py-4 rounded-2xl font-black text-sm hover:bg-opacity-90 transition-all shadow-md flex items-center justify-center border-none"
+                      className="w-full bg-dourado text-white py-3 md:py-4 rounded-2xl font-black text-sm hover:bg-opacity-90 transition-all shadow-md flex items-center justify-center border-none"
                     >
                       {loadingPlan === `premium_${billingPeriod === 'monthly' ? 'month' : 'year'}` ? (
                         <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
                       ) : (
-                        'Assinar Premium (Asaas)'
+                        'Assinar Premium'
                       )}
                     </button>
                   </div>
