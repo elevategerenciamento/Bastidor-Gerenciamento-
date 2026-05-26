@@ -27,9 +27,10 @@ interface SubscriptionModalProps {
   currentPlan?: string | null; // 'basic', 'premium' ou null
   subscriptionStatus?: string | null; // 'active', 'pending', etc.
   invoiceUrl?: string | null; // URL da fatura no Asaas
+  onSubscriptionUpdated?: () => Promise<void>;
 }
 
-export default function SubscriptionModal({ onClose, currentPlan, subscriptionStatus, invoiceUrl }: SubscriptionModalProps) {
+export default function SubscriptionModal({ onClose, currentPlan, subscriptionStatus, invoiceUrl, onSubscriptionUpdated }: SubscriptionModalProps) {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -101,6 +102,37 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
     }
   };
 
+  const handleCancelPending = async () => {
+    try {
+      setLoadingPlan('cancel_pending');
+      setErrorMessage(null);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Você precisa estar logado para realizar esta ação.');
+      }
+
+      // Deleta a assinatura pendente do banco de dados
+      const { error } = await supabase
+        .from('subscriptions')
+        .delete()
+        .eq('user_id', session.user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      if (onSubscriptionUpdated) {
+        await onSubscriptionUpdated();
+      }
+    } catch (err: any) {
+      console.error('Erro ao cancelar assinatura pendente:', err);
+      setErrorMessage(err.message || 'Ocorreu um erro ao cancelar a assinatura pendente.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -166,13 +198,31 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                   ? 'Você tem acesso completo aos recursos. Clique no botão abaixo para acessar o histórico de faturas e pagamentos no seu painel.'
                   : 'Sua assinatura foi registrada. Clique no botão abaixo para abrir a fatura e escolher a forma de pagamento (PIX, Cartão ou Boleto).'}
               </p>
-              <button
-                onClick={handleOpenInvoice}
-                className="w-full bg-vinho text-creme py-3.5 md:py-4 rounded-2xl font-black text-sm hover:bg-opacity-90 transition-all shadow-lg flex items-center justify-center gap-2 uppercase tracking-wider"
-              >
-                <CreditCard className="w-5 h-5" />
-                {isSubscribed ? 'Visualizar Faturas' : 'Ir para o Pagamento'}
-              </button>
+              
+              <div className="space-y-3 w-full">
+                <button
+                  onClick={handleOpenInvoice}
+                  disabled={loadingPlan !== null}
+                  className="w-full bg-vinho text-creme py-3.5 md:py-4 rounded-2xl font-black text-sm hover:bg-opacity-90 transition-all shadow-lg flex items-center justify-center gap-2 uppercase tracking-wider"
+                >
+                  <CreditCard className="w-5 h-5" />
+                  {isSubscribed ? 'Visualizar Faturas' : 'Ir para o Pagamento'}
+                </button>
+
+                {!isSubscribed && isPending && (
+                  <button
+                    onClick={handleCancelPending}
+                    disabled={loadingPlan !== null}
+                    className="w-full bg-white border-2 border-rosa text-vinho py-3.5 md:py-4 rounded-2xl font-black text-sm hover:bg-rosa/15 transition-all shadow-sm flex items-center justify-center gap-2 uppercase tracking-wider"
+                  >
+                    {loadingPlan === 'cancel_pending' ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-vinho"></div>
+                    ) : (
+                      'Cancelar Assinatura Pendente'
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             /* Tela de Escolha de Planos */

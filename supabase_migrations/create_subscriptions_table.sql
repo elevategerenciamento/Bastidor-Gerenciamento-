@@ -29,6 +29,18 @@ CREATE POLICY "Usuários podem visualizar sua própria assinatura"
   FOR SELECT 
   USING (auth.uid() = user_id);
 
+-- Política: Usuários podem deletar sua própria assinatura
+CREATE POLICY "Usuários podem deletar sua própria assinatura" 
+  ON public.subscriptions
+  FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- Política: Usuários podem atualizar sua própria assinatura
+CREATE POLICY "Usuários podem atualizar sua própria assinatura" 
+  ON public.subscriptions
+  FOR UPDATE
+  USING (auth.uid() = user_id);
+
 -- 2. Tabela de Downloads de PDF (pdf_downloads)
 CREATE TABLE IF NOT EXISTS public.pdf_downloads (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

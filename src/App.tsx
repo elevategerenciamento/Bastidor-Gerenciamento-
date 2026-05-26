@@ -1451,6 +1451,11 @@ export default function App() {
             currentPlan={subscription?.plan_tier}
             subscriptionStatus={subscription?.status}
             invoiceUrl={subscription?.asaas_invoice_url}
+            onSubscriptionUpdated={async () => {
+              if (user) {
+                await fetchSubscription(user.id);
+              }
+            }}
           />
         )}
       </AnimatePresence>
