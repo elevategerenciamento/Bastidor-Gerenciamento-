@@ -36,6 +36,7 @@ import { INITIAL_ORDERS, TODAY } from './constants';
 import { Order, PaymentInfo, InventoryItem } from './types';
 import { formatCurrency, getDaysRemaining, getStatusColor } from './lib/utils';
 import { supabase } from './lib/supabase';
+import SubscriptionModal from './components/SubscriptionModal';
 
 
 export default function App() {
@@ -43,7 +44,44 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [subscription, setSubscription] = useState<any>(null);
+  const [pdfDownloadCount, setPdfDownloadCount] = useState<number>(0);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [subscriptionMessage, setSubscriptionMessage] = useState<string | null>(null);
 
+  const fetchSubscription = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      setSubscription(data);
+    } catch (err) {
+      console.error('Error fetching subscription:', err);
+    }
+  };
+
+  const fetchPdfDownloadCount = async (userId: string) => {
+    try {
+      const startOfMonth = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1).toISOString();
+      const endOfMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+      const { count, error } = await supabase
+        .from('pdf_downloads')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('downloaded_at', startOfMonth)
+        .lte('downloaded_at', endOfMonth);
+
+      if (error) throw error;
+      setPdfDownloadCount(count || 0);
+    } catch (err) {
+      console.error('Error fetching PDF download count:', err);
+    }
+  };
 
   useEffect(() => {
     // Check current session
@@ -52,25 +90,41 @@ export default function App() {
       if (session?.user) {
         fetchOrders();
         fetchInventory();
+        fetchSubscription(session.user.id);
+        fetchPdfDownloadCount(session.user.id);
       } else {
         setLoading(false);
       }
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchOrders();
         fetchInventory();
+        fetchSubscription(session.user.id);
+        fetchPdfDownloadCount(session.user.id);
       } else {
-
         setOrders([]);
+        setSubscription(null);
+        setPdfDownloadCount(0);
         setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Check URL parameters for Stripe redirect
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'success') {
+      setSubscriptionMessage('Assinatura processada com sucesso! Bem-vinda ao Bastidor Premium.');
+      // Limpa os parâmetros da URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('payment') === 'cancel') {
+      setSubscriptionMessage('O processo de assinatura foi cancelado.');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    return () => authSub.unsubscribe();
   }, []);
 
   const fetchOrders = async () => {
@@ -341,6 +395,25 @@ export default function App() {
 
   const addNewOrder = async (newOrder: Omit<Order, 'id' | 'completed'>) => {
     if (!user) return;
+
+    // Verificação de limites baseados no plano
+    const isBasic = subscription && subscription.status === 'active' && subscription.plan_tier === 'basic';
+    const isPremium = subscription && subscription.status === 'active' && subscription.plan_tier === 'premium';
+    const isFree = !subscription || subscription.status !== 'active';
+
+    if (isFree && orders.length >= 3) {
+      alert("Limite de 3 pedidos atingido no Plano Gratuito! Faça a sua assinatura para continuar cadastrando.");
+      setIsAddingOrder(false);
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
+
+    if (isBasic && orders.length >= 15) {
+      alert("Limite de 15 pedidos atingido no Plano Básico! Faça o upgrade para o Plano Premium para pedidos ilimitados.");
+      setIsAddingOrder(false);
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     
     const { data, error } = await supabase
       .from('orders')
@@ -418,6 +491,24 @@ export default function App() {
 
   const addInventoryItem = async (newItem: Omit<InventoryItem, 'id'>) => {
     if (!user) return;
+
+    const isBasic = subscription && subscription.status === 'active' && subscription.plan_tier === 'basic';
+    const isPremium = subscription && subscription.status === 'active' && subscription.plan_tier === 'premium';
+    const isFree = !subscription || subscription.status !== 'active';
+
+    if (isFree) {
+      alert("O controle de estoque é exclusivo para assinantes! Escolha um plano para ativar.");
+      setIsInventoryOpen(false);
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
+
+    if (isBasic && inventory.length >= 20) {
+      alert("Limite de 20 itens no estoque atingido no Plano Básico! Faça o upgrade para o Plano Premium para ter estoque ilimitado.");
+      setIsInventoryOpen(false);
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     
     const { data, error } = await supabase
       .from('inventory')
@@ -494,7 +585,31 @@ export default function App() {
   };
 
 
-  const generatePDF = () => {
+  const generatePDF = async () => {
+    // 1. Verificações de limites de PDF
+    const isBasic = subscription && subscription.status === 'active' && subscription.plan_tier === 'basic';
+    const isPremium = subscription && subscription.status === 'active' && subscription.plan_tier === 'premium';
+    const isFree = !subscription || subscription.status !== 'active';
+
+    if (isFree) {
+      if (pdfDownloadCount >= 1) {
+        alert("Você atingiu o limite de 1 download de relatório PDF de teste no Plano Gratuito! Faça a sua assinatura para continuar gerando relatórios.");
+        setIsSubscriptionModalOpen(true);
+        return;
+      }
+    } else if (isBasic) {
+      if (isCustomRange) {
+        alert("Relatórios personalizados por período são exclusivos do Plano Premium! Faça o upgrade para liberar.");
+        setIsSubscriptionModalOpen(true);
+        return;
+      }
+      if (pdfDownloadCount >= 2) {
+        alert("Você atingiu o limite de 2 downloads de relatório PDF este mês no Plano Básico! Faça o upgrade para o Plano Premium para ter downloads ilimitados.");
+        setIsSubscriptionModalOpen(true);
+        return;
+      }
+    }
+
     const doc = new jsPDF();
     let reportTitle = '';
     let filteredOrders: Order[] = [];
@@ -657,6 +772,21 @@ export default function App() {
     }
     
     doc.save(`Relatorio_Bastidor_${periodLabel.replace(/ /g, '_')}.pdf`);
+
+    // 2. Registrar download de PDF caso o plano seja Gratuito ou Básico
+    if (isFree || isBasic) {
+      try {
+        const { error } = await supabase
+          .from('pdf_downloads')
+          .insert([{ user_id: user.id }]);
+        
+        if (!error) {
+          setPdfDownloadCount(prev => prev + 1);
+        }
+      } catch (err) {
+        console.error('Erro ao registrar cota de download de PDF:', err);
+      }
+    }
   };
   const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(TODAY.getFullYear(), reportMonth));
 
@@ -728,8 +858,15 @@ export default function App() {
               <nav className="flex-1 p-4 space-y-2 mt-4">
                 <button 
                   onClick={() => {
-                    setIsInventoryOpen(true);
-                    setIsSidebarOpen(false);
+                    const isFree = !subscription || subscription.status !== 'active';
+                    if (isFree) {
+                      alert("O controle de estoque é exclusivo para assinantes! Escolha um plano para ativar.");
+                      setIsSidebarOpen(false);
+                      setIsSubscriptionModalOpen(true);
+                    } else {
+                      setIsInventoryOpen(true);
+                      setIsSidebarOpen(false);
+                    }
                   }}
                   className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
                 >
@@ -737,12 +874,19 @@ export default function App() {
                   <span>Estoque & Compras</span>
                 </button>
                 <button 
-                  onClick={() => setIsSidebarOpen(false)}
-
+                  onClick={() => {
+                    setIsSubscriptionModalOpen(true);
+                    setIsSidebarOpen(false);
+                  }}
                   className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
                 >
                   <CreditCard className="w-5 h-5" />
-                  <span>Minha Assinatura</span>
+                  <span className="flex-1 text-left">Minha Assinatura</span>
+                  {subscription && subscription.status === 'active' && (
+                    <span className="text-[8px] bg-dourado text-white font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter">
+                      {subscription.plan_tier === 'premium' ? 'Premium' : 'Básico'}
+                    </span>
+                  )}
                 </button>
                 <button 
                   onClick={() => setIsSidebarOpen(false)}
@@ -795,6 +939,18 @@ export default function App() {
           <p className="text-[10px] text-rosa tracking-[3px] uppercase font-bold">seu ateliê organizado • olá, {user?.user_metadata?.full_name || user?.email?.split('@')[0]}</p>
         </motion.div>
       </header>
+
+      {subscriptionMessage && (
+        <div className="bg-verde text-creme text-center py-3.5 px-6 text-xs font-black uppercase tracking-wider flex justify-between items-center shadow-md animate-in fade-in slide-in-from-top-2 duration-300">
+          <span className="flex-1 text-center">✦ {subscriptionMessage} ✦</span>
+          <button 
+            onClick={() => setSubscriptionMessage(null)}
+            className="p-1 text-creme hover:text-white rounded-full hover:bg-white/10 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       <div className="bg-dourado text-white text-center py-2 text-xs font-medium tracking-wider">
         hoje: {TODAY.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -1287,6 +1443,13 @@ export default function App() {
             onAdd={addInventoryItem}
             onUpdate={updateInventoryItem}
             onDelete={deleteInventoryItem}
+          />
+        )}
+        {isSubscriptionModalOpen && (
+          <SubscriptionModal 
+            onClose={() => setIsSubscriptionModalOpen(false)}
+            currentPlan={subscription?.plan_tier}
+            subscriptionStatus={subscription?.status}
           />
         )}
       </AnimatePresence>
