@@ -118,9 +118,13 @@ serve(async (req) => {
       }
     }
 
-    // Define o vencimento da primeira parcela (nextDueDate) para amanhã
+    // Define o vencimento da primeira parcela (nextDueDate) com base no intervalo do plano (30 dias para mensal, 1 ano para anual)
     const nextDueDate = new Date();
-    nextDueDate.setDate(nextDueDate.getDate() + 1);
+    if (planInterval === "year") {
+      nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
+    } else {
+      nextDueDate.setDate(nextDueDate.getDate() + 30);
+    }
     const nextDueDateStr = nextDueDate.toISOString().split("T")[0];
 
     // Cria a assinatura no Asaas
