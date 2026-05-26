@@ -1,20 +1,23 @@
 -- ====================================================================
--- SCRIPT DE BANCO DE DADOS - PLANOS DE ASSINATURA BASTIDOR
+-- SCRIPT DE BANCO DE DADOS - PLANOS DE ASSINATURA BASTIDOR (ASAAS)
 -- Execute estas queries no SQL Editor do seu painel do Supabase.
 -- ====================================================================
 
--- 1. Tabela de Assinaturas (subscriptions)
-CREATE TABLE IF NOT EXISTS public.subscriptions (
-  user_id UUID REFERENCES auth.users NOT null PRIMARY KEY,
-  stripe_customer_id TEXT,
-  stripe_subscription_id TEXT,
-  status TEXT, -- ex: 'active', 'trialing', 'canceled', 'incomplete', 'past_due'
+-- Remover a tabela antiga de assinaturas se ela existir
+DROP TABLE IF EXISTS public.subscriptions;
+
+-- 1. Nova Tabela de Assinaturas (subscriptions) para o Asaas
+CREATE TABLE public.subscriptions (
+  user_id UUID REFERENCES auth.users NOT NULL PRIMARY KEY,
+  asaas_customer_id TEXT,
+  asaas_subscription_id TEXT,
+  asaas_invoice_url TEXT, -- URL de pagamento da fatura no Asaas
+  status TEXT, -- ex: 'active', 'canceled', 'overdue', 'pending'
   plan_tier TEXT, -- 'basic' ou 'premium'
   plan_interval TEXT, -- 'month' ou 'year'
-  price_id TEXT, -- ID do preço cadastrado no Stripe
   current_period_end TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT null,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT null
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- Habilitar Row Level Security (RLS)
@@ -27,18 +30,16 @@ CREATE POLICY "Usuários podem visualizar sua própria assinatura"
   USING (auth.uid() = user_id);
 
 -- 2. Tabela de Downloads de PDF (pdf_downloads)
--- Utilizada para controlar o limite de downloads do plano gratuito (1 download de teste)
--- e do plano Básico (2 downloads por mês).
 CREATE TABLE IF NOT EXISTS public.pdf_downloads (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users NOT null,
-  downloaded_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT null
+  user_id UUID REFERENCES auth.users NOT NULL,
+  downloaded_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Habilitar Row Level Security (RLS)
+-- Habilitar Row Level Security (RLS) para pdf_downloads
 ALTER TABLE public.pdf_downloads ENABLE ROW LEVEL SECURITY;
 
--- Política: Usuários podem visualizar apenas seus próprios registros de download
+-- Política: Usuários podem visualizar apenas seus próprios downloads de PDF
 CREATE POLICY "Usuários podem visualizar seus próprios downloads de PDF" 
   ON public.pdf_downloads
   FOR SELECT 

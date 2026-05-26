@@ -3,30 +3,25 @@ import { motion } from 'motion/react';
 import { Check, X, Sparkles, CreditCard, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-// IDs dos Preços do Stripe - Podem ser editados aqui ou via variáveis de ambiente (.env)
-export const STRIPE_PRICES = {
-  BASIC_MONTHLY: (import.meta as any).env.VITE_STRIPE_BASIC_MONTHLY || 'price_1PBasicMonthlyXXX',
-  BASIC_YEARLY: (import.meta as any).env.VITE_STRIPE_BASIC_YEARLY || 'price_1PBasicYearlyXXX',
-  PREMIUM_MONTHLY: (import.meta as any).env.VITE_STRIPE_PREMIUM_MONTHLY || 'price_1PPremiumMonthlyXXX',
-  PREMIUM_YEARLY: (import.meta as any).env.VITE_STRIPE_PREMIUM_YEARLY || 'price_1PPremiumYearlyXXX',
-};
-
 interface SubscriptionModalProps {
   onClose: () => void;
   currentPlan?: string | null; // 'basic', 'premium' ou null
-  subscriptionStatus?: string | null; // 'active', etc.
+  subscriptionStatus?: string | null; // 'active', 'pending', etc.
+  invoiceUrl?: string | null; // URL da fatura no Asaas
 }
 
-export default function SubscriptionModal({ onClose, currentPlan, subscriptionStatus }: SubscriptionModalProps) {
+export default function SubscriptionModal({ onClose, currentPlan, subscriptionStatus, invoiceUrl }: SubscriptionModalProps) {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
-  const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isSubscribed = currentPlan && subscriptionStatus === 'active';
+  const isPending = currentPlan && subscriptionStatus === 'pending';
 
-  const handleSubscribe = async (priceId: string) => {
+  const handleSubscribe = async (planTier: 'basic' | 'premium', planInterval: 'month' | 'year') => {
+    const planKey = `${planTier}_${planInterval}`;
     try {
-      setLoadingPriceId(priceId);
+      setLoadingPlan(planKey);
       setErrorMessage(null);
 
       // Obtém a sessão do usuário logado
@@ -35,9 +30,9 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
         throw new Error('Você precisa estar logado para assinar um plano.');
       }
 
-      // Chama a Edge Function no Supabase
+      // Chama a Edge Function no Supabase para criar a assinatura no Asaas
       const response = await fetch(
-        `${(import.meta as any).env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`,
+        `${(import.meta as any).env.VITE_SUPABASE_URL}/functions/v1/create-asaas-subscription`,
         {
           method: 'POST',
           headers: {
@@ -45,68 +40,34 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
             'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            priceId: priceId,
-            successUrl: window.location.origin + '/?payment=success',
-            cancelUrl: window.location.origin + '/?payment=cancel',
+            planTier: planTier,
+            planInterval: planInterval,
           }),
         }
       );
 
       const data = await response.json();
       if (!response.ok || data.error) {
-        throw new Error(data.error || 'Erro ao gerar checkout. Verifique se o preço está correto.');
+        throw new Error(data.error || 'Erro ao gerar checkout com o Asaas.');
       }
 
       if (data.url) {
-        // Redireciona o usuário para o Stripe Checkout
+        // Redireciona o usuário para a fatura do Asaas
         window.location.href = data.url;
       }
     } catch (err: any) {
-      console.error('Erro de Checkout:', err);
-      setErrorMessage(err.message || 'Ocorreu um erro inesperado.');
+      console.error('Erro de Checkout Asaas:', err);
+      setErrorMessage(err.message || 'Ocorreu um erro inesperado ao conectar ao Asaas.');
     } finally {
-      setLoadingPriceId(null);
+      setLoadingPlan(null);
     }
   };
 
-  const handleManageSubscription = async () => {
-    try {
-      setLoadingPriceId('portal');
-      setErrorMessage(null);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Não autenticado.');
-      }
-
-      // Chama a Edge Function para o portal de faturamento
-      const response = await fetch(
-        `${(import.meta as any).env.VITE_SUPABASE_URL}/functions/v1/create-portal-session`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            returnUrl: window.location.origin + '/',
-          }),
-        }
-      );
-
-      const data = await response.json();
-      if (!response.ok || data.error) {
-        throw new Error(data.error || 'Erro ao acessar o portal de cobrança.');
-      }
-
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err: any) {
-      console.error('Erro de Portal:', err);
-      setErrorMessage(err.message || 'Erro ao carregar configurações de assinatura.');
-    } finally {
-      setLoadingPriceId(null);
+  const handleOpenInvoice = () => {
+    if (invoiceUrl) {
+      window.location.href = invoiceUrl;
+    } else {
+      setErrorMessage('Link de faturamento não encontrado. Verifique seu e-mail ou SMS cadastrado no Asaas.');
     }
   };
 
@@ -136,15 +97,17 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
         <div className="p-8 md:p-12 space-y-8">
           <div className="text-center space-y-2 max-w-xl mx-auto">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-rosa/20 rounded-full text-xs font-black text-vinho uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5 text-dourado fill-dourado" /> Planos Bastidor
+              <Sparkles className="w-3.5 h-3.5 text-dourado fill-dourado" /> Assinaturas Asaas
             </div>
             <h2 className="text-3xl md:text-4xl font-serif font-black text-vinho lowercase">
-              {isSubscribed ? 'sua assinatura atual' : 'escolha o plano ideal para seu ateliê'}
+              {isSubscribed ? 'sua assinatura ativa' : isPending ? 'pagamento pendente' : 'escolha o plano ideal para seu ateliê'}
             </h2>
             <p className="text-cinza text-sm font-medium leading-relaxed">
               {isSubscribed 
-                ? 'Gerencie seus pagamentos, altere sua periodicidade ou mude de plano no botão de gerenciamento abaixo.'
-                : 'Tenha seu ateliê organizado e leve com acesso a mais recursos de controle e relatórios.'}
+                ? 'Gerencie seus pagamentos, altere sua periodicidade ou mude de plano através das faturas do Asaas.'
+                : isPending
+                ? 'Identificamos que você gerou uma fatura no Asaas. Efetue o pagamento por PIX, Cartão ou Boleto para liberar o acesso.'
+                : 'Tenha seu ateliê organizado e leve com acesso a mais recursos de controle e relatórios via Asaas.'}
             </p>
           </div>
 
@@ -154,10 +117,10 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
             </div>
           )}
 
-          {isSubscribed ? (
-            /* Painel de Assinatura Ativa */
+          {isSubscribed || isPending ? (
+            /* Painel de Assinatura Ativa ou Pendente */
             <div className="bg-white rounded-[32px] p-8 border border-rosa/30 shadow-md text-center max-w-md mx-auto space-y-6">
-              <div className="bg-verde/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto text-verde">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${isSubscribed ? 'bg-verde/10 text-verde' : 'bg-amarelo/10 text-amarelo'}`}>
                 <ShieldCheck className="w-10 h-10" />
               </div>
               <div>
@@ -165,25 +128,20 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                   Plano {currentPlan === 'premium' ? 'Premium ✦' : 'Básico (Basic)'}
                 </h4>
                 <p className="text-xs text-cinza uppercase tracking-wider font-bold mt-1">
-                  Status: Assinatura Ativa
+                  Status: {isSubscribed ? 'Assinatura Ativa (Asaas)' : 'Aguardando Pagamento (Asaas)'}
                 </p>
               </div>
               <p className="text-sm text-cinza font-medium px-4">
-                Você tem acesso aos recursos inclusos no seu plano. Para trocar de cartão, mudar de plano ou cancelar, utilize o portal seguro do Stripe.
+                {isSubscribed 
+                  ? 'Você tem acesso completo aos recursos. Clique no botão abaixo para acessar o histórico de faturas e pagamentos no painel do Asaas.'
+                  : 'Sua assinatura foi registrada no Asaas. Clique no botão abaixo para abrir a fatura e escolher a forma de pagamento (PIX, Cartão ou Boleto).'}
               </p>
               <button
-                onClick={handleManageSubscription}
-                disabled={loadingPriceId === 'portal'}
+                onClick={handleOpenInvoice}
                 className="w-full bg-vinho text-creme py-4 rounded-2xl font-black text-sm hover:bg-opacity-90 transition-all shadow-lg flex items-center justify-center gap-2 uppercase tracking-wider"
               >
-                {loadingPriceId === 'portal' ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-creme"></div>
-                ) : (
-                  <>
-                    <CreditCard className="w-5 h-5" />
-                    Gerenciar Assinatura
-                  </>
-                )}
+                <CreditCard className="w-5 h-5" />
+                {isSubscribed ? 'Visualizar Faturas (Asaas)' : 'Pagar Fatura no Asaas'}
               </button>
             </div>
           ) : (
@@ -208,7 +166,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                 <span className={`text-xs font-black uppercase tracking-wider transition-colors ${billingPeriod === 'yearly' ? 'text-vinho' : 'text-cinza/60'} flex items-center gap-1.5`}>
                   Anual 
                   <span className="text-[9px] bg-dourado text-white font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter">
-                    -20%
+                    Economize
                   </span>
                 </span>
               </div>
@@ -265,14 +223,14 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
 
                   <div className="pt-8">
                     <button
-                      onClick={() => handleSubscribe(billingPeriod === 'monthly' ? STRIPE_PRICES.BASIC_MONTHLY : STRIPE_PRICES.BASIC_YEARLY)}
-                      disabled={loadingPriceId !== null}
+                      onClick={() => handleSubscribe('basic', billingPeriod === 'monthly' ? 'month' : 'year')}
+                      disabled={loadingPlan !== null}
                       className="w-full bg-white border-2 border-rosa text-vinho py-4 rounded-2xl font-black text-sm hover:bg-rosa/15 transition-all shadow-sm flex items-center justify-center"
                     >
-                      {loadingPriceId === (billingPeriod === 'monthly' ? STRIPE_PRICES.BASIC_MONTHLY : STRIPE_PRICES.BASIC_YEARLY) ? (
+                      {loadingPlan === `basic_${billingPeriod === 'monthly' ? 'month' : 'year'}` ? (
                         <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-vinho"></div>
                       ) : (
-                        'Assinar Básico'
+                        'Assinar Básico (Asaas)'
                       )}
                     </button>
                   </div>
@@ -283,7 +241,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
                   whileHover={{ y: -5 }}
                   className="bg-vinho rounded-[32px] p-8 border-2 border-dourado/80 shadow-xl flex flex-col justify-between relative overflow-hidden text-creme"
                 >
-                  {/* Tag Mais Popular */}
+                  {/* Tag Premium */}
                   <div className="absolute top-5 right-[-35px] bg-dourado text-white text-[9px] font-black py-1 px-10 rotate-45 uppercase tracking-widest shadow-md">
                     Premium
                   </div>
@@ -336,14 +294,14 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
 
                   <div className="pt-8">
                     <button
-                      onClick={() => handleSubscribe(billingPeriod === 'monthly' ? STRIPE_PRICES.PREMIUM_MONTHLY : STRIPE_PRICES.PREMIUM_YEARLY)}
-                      disabled={loadingPriceId !== null}
+                      onClick={() => handleSubscribe('premium', billingPeriod === 'monthly' ? 'month' : 'year')}
+                      disabled={loadingPlan !== null}
                       className="w-full bg-dourado text-white py-4 rounded-2xl font-black text-sm hover:bg-opacity-90 transition-all shadow-md flex items-center justify-center border-none"
                     >
-                      {loadingPriceId === (billingPeriod === 'monthly' ? STRIPE_PRICES.PREMIUM_MONTHLY : STRIPE_PRICES.PREMIUM_YEARLY) ? (
+                      {loadingPlan === `premium_${billingPeriod === 'monthly' ? 'month' : 'year'}` ? (
                         <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
                       ) : (
-                        'Assinar Premium'
+                        'Assinar Premium (Asaas)'
                       )}
                     </button>
                   </div>

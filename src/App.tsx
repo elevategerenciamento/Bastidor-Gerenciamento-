@@ -1450,6 +1450,7 @@ export default function App() {
             onClose={() => setIsSubscriptionModalOpen(false)}
             currentPlan={subscription?.plan_tier}
             subscriptionStatus={subscription?.status}
+            invoiceUrl={subscription?.asaas_invoice_url}
           />
         )}
       </AnimatePresence>
