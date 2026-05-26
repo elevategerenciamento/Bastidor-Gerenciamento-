@@ -39,11 +39,17 @@ serve(async (req) => {
       throw new Error("Não autorizado");
     }
 
-    // Lê os dados enviados na requisição
-    const { planTier, planInterval } = await req.json();
+    // Lê os dados enviados na requisição (incluindo o cpfCnpj)
+    const { planTier, planInterval, cpfCnpj } = await req.json();
     if (!planTier || !planInterval) {
       throw new Error("planTier e planInterval são obrigatórios.");
     }
+    if (!cpfCnpj) {
+      throw new Error("O CPF ou CNPJ do cliente é obrigatório para faturamento no Asaas.");
+    }
+
+    // Limpa pontos, traços e barras do CPF/CNPJ
+    const cleanCpfCnpj = cpfCnpj.replace(/[^\d]/g, "");
 
     // Determina o valor do plano e o ciclo
     let value = 19.90;
@@ -73,7 +79,7 @@ serve(async (req) => {
     let customerId = subscriptionData?.asaas_customer_id;
 
     if (!customerId) {
-      // Cria um novo cliente no Asaas
+      // Cria um novo cliente no Asaas com o CPF/CNPJ
       const customerName = user.user_metadata?.full_name || user.email?.split("@")[0] || "Cliente Bastidor";
       const customerResponse = await fetch(`${asaasUrl}/customers`, {
         method: "POST",
@@ -84,6 +90,7 @@ serve(async (req) => {
         body: JSON.stringify({
           name: customerName,
           email: user.email,
+          cpfCnpj: cleanCpfCnpj,
         }),
       });
 
@@ -92,10 +99,26 @@ serve(async (req) => {
         throw new Error(customer.errors?.[0]?.description || "Erro ao criar cliente no Asaas.");
       }
       customerId = customer.id;
+    } else {
+      // Atualiza o cliente existente com o CPF/CNPJ fornecido (caso não estivesse preenchido antes)
+      const updateResponse = await fetch(`${asaasUrl}/customers/${customerId}`, {
+        method: "POST",
+        headers: {
+          "access_token": asaasApiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cpfCnpj: cleanCpfCnpj,
+        }),
+      });
+      
+      if (!updateResponse.ok) {
+        const updateData = await updateResponse.json();
+        console.error("Erro ao atualizar CPF do cliente no Asaas:", updateData.errors?.[0]?.description);
+      }
     }
 
     // Define o vencimento da primeira parcela (nextDueDate) para amanhã
-    // (O Asaas exige que o vencimento de uma assinatura seja no futuro)
     const nextDueDate = new Date();
     nextDueDate.setDate(nextDueDate.getDate() + 1);
     const nextDueDateStr = nextDueDate.toISOString().split("T")[0];

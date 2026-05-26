@@ -3,6 +3,25 @@ import { motion } from 'motion/react';
 import { Check, X, Sparkles, CreditCard, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
+const formatCpfCnpj = (value: string) => {
+  const clean = value.replace(/[^\d]/g, '');
+  if (clean.length <= 11) {
+    // CPF: 000.000.000-00
+    return clean
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  } else {
+    // CNPJ: 00.000.000/0000-00
+    return clean
+      .substring(0, 14)
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1/$2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+};
+
 interface SubscriptionModalProps {
   onClose: () => void;
   currentPlan?: string | null; // 'basic', 'premium' ou null
@@ -14,6 +33,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cpfCnpj, setCpfCnpj] = useState('');
 
   const isSubscribed = currentPlan && subscriptionStatus === 'active';
   const isPending = currentPlan && subscriptionStatus === 'pending';
@@ -23,6 +43,15 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
     try {
       setLoadingPlan(planKey);
       setErrorMessage(null);
+
+      // Validação do CPF/CNPJ
+      const cleanCpfCnpj = cpfCnpj.replace(/[^\d]/g, '');
+      if (!cleanCpfCnpj) {
+        throw new Error('Por favor, insira o seu CPF ou CNPJ de faturamento antes de prosseguir.');
+      }
+      if (cleanCpfCnpj.length !== 11 && cleanCpfCnpj.length !== 14) {
+        throw new Error('Por favor, insira um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.');
+      }
 
       // Obtém a sessão do usuário logado
       const { data: { session } } = await supabase.auth.getSession();
@@ -42,6 +71,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
           body: JSON.stringify({
             planTier: planTier,
             planInterval: planInterval,
+            cpfCnpj: cleanCpfCnpj,
           }),
         }
       );
@@ -147,6 +177,25 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
           ) : (
             /* Tela de Escolha de Planos */
             <>
+              {/* Campo CPF/CNPJ de faturamento */}
+              <div className="max-w-md mx-auto bg-white rounded-[24px] p-6 border border-rosa/30 shadow-md space-y-3 mb-8 text-left">
+                <label className="block text-xs font-black text-vinho uppercase tracking-wider">
+                  CPF ou CNPJ do Titular (Faturamento)
+                </label>
+                <input
+                  type="text"
+                  placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                  value={cpfCnpj}
+                  onChange={(e) => {
+                    setCpfCnpj(formatCpfCnpj(e.target.value));
+                  }}
+                  className="w-full bg-creme border-2 border-rosa/30 rounded-2xl px-4 py-3 text-sm text-vinho font-semibold placeholder:text-cinza/40 focus:outline-none focus:border-vinho transition-all"
+                />
+                <p className="text-[10px] text-cinza/70 font-medium leading-normal">
+                  * Necessário para a geração da fatura e Pix de forma segura no gateway Asaas.
+                </p>
+              </div>
+
               {/* Toggle Mensal/Anual */}
               <div className="flex justify-center items-center gap-4">
                 <span className={`text-xs font-black uppercase tracking-wider transition-colors ${billingPeriod === 'monthly' ? 'text-vinho' : 'text-cinza/60'}`}>
