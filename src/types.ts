@@ -17,6 +17,7 @@ export interface PaymentInfo {
   pixRemainingPaid: boolean;
   cardInstallments: number;
   cardPaid: boolean;
+  shippingValue?: string;
 }
 
 export type MonthKey = 3 | 4 | 5; // April, May, June 2026

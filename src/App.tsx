@@ -28,7 +28,8 @@ import {
   Menu,
   Settings,
   CreditCard,
-  LogOut
+  LogOut,
+  Search
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -184,6 +185,7 @@ export default function App() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'received' | 'pending' | 'urgent' | 'completed'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0); // 0: April, 1: May, 2: June
   const [isAddingOrder, setIsAddingOrder] = useState(false);
@@ -253,7 +255,8 @@ export default function App() {
 
     orders.forEach(o => {
       if (o.isPartnership) return;
-      const value = parseFloat(o.payment.totalValue.replace(',', '.')) || 0;
+      const shipping = parseFloat(o.payment.shippingValue?.replace(',', '.') || '0') || 0;
+      const value = (parseFloat(o.payment.totalValue.replace(',', '.')) || 0) + shipping;
       const month = o.deadline ? o.deadline.getMonth() : null;
 
       if (month !== null && monthlyTotals[month]) {
@@ -324,6 +327,12 @@ export default function App() {
   const filteredOrders = useMemo(() => {
     let result = [...orders];
 
+    if (searchTerm.trim() !== '') {
+      result = result.filter(o => 
+        o.customerName.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
     if (selectedDate) {
       result = result.filter(o => o.deadline && o.deadline.toDateString() === selectedDate.toDateString());
     } else {
@@ -361,7 +370,7 @@ export default function App() {
       if (!b.deadline) return -1;
       return a.deadline.getTime() - b.deadline.getTime();
     });
-  }, [orders, activeFilter]);
+  }, [orders, activeFilter, selectedDate, searchTerm]);
 
   const updateOrderPayment = async (id: string, updates: Partial<PaymentInfo>) => {
     const order = orders.find(o => o.id === id);
@@ -1339,25 +1348,51 @@ export default function App() {
             </button>
           </div>
 
+          {/* Barra de Pesquisa */}
+          <div className="relative group">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+              <Search className="w-4 h-4" />
+            </div>
+            {searchTerm && (
+              <button 
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-cinza hover:text-vinho transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            <input 
+              type="text" 
+              className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-10 py-3 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium placeholder:text-cinza/30 shadow-sm"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Pesquisar cliente por nome..."
+            />
+          </div>
+
           <div className="space-y-4">
-            {(activeFilter !== 'all' || selectedDate) && (
+            {(activeFilter !== 'all' || selectedDate || searchTerm.trim() !== '') && (
               <div className="flex items-center justify-between bg-creme/30 p-2 rounded-lg border border-rosa/30">
                 <span className="text-xs font-medium text-vinho">
                   {selectedDate ? (
                     <>Pedidos para: <span className="font-bold uppercase">{selectedDate.toLocaleDateString('pt-BR')}</span></>
-                  ) : (
+                  ) : activeFilter !== 'all' ? (
                     <>Filtrando por: <span className="font-bold uppercase">{
                       activeFilter === 'received' ? 'Já recebi' :
                       activeFilter === 'pending' ? 'A receber' :
                       activeFilter === 'urgent' ? 'Urgente' :
                       activeFilter === 'completed' ? 'Concluídos' : ''
                     }</span></>
+                  ) : (
+                    <>Pesquisando por: <span className="font-bold">"{searchTerm}"</span></>
                   )}
                 </span>
                 <button 
                   onClick={() => {
                     setActiveFilter('all');
                     setSelectedDate(null);
+                    setSearchTerm('');
                   }}
                   className="text-[10px] font-bold text-vinho hover:underline"
                 >
@@ -1808,6 +1843,7 @@ function AddOrderModal({
   const [isPartnership, setIsPartnership] = useState(orderToEdit?.isPartnership || false);
   const [value, setValue] = useState(orderToEdit?.payment.totalValue || '');
   const [entryAmount, setEntryAmount] = useState(orderToEdit?.payment.pixEntryAmount || '');
+  const [shippingValue, setShippingValue] = useState(orderToEdit?.payment.shippingValue || '');
 
   const entryPercentage = useMemo(() => {
     const total = parseFloat(value.replace(',', '.')) || 0;
@@ -1828,14 +1864,15 @@ function AddOrderModal({
       notes,
       deadline: date ? new Date(date + 'T12:00:00') : null,
       isPartnership,
-      payment: orderToEdit ? { ...orderToEdit.payment, totalValue: value, pixEntryAmount: entryAmount } : {
+      payment: orderToEdit ? { ...orderToEdit.payment, totalValue: value, pixEntryAmount: entryAmount, shippingValue } : {
         totalValue: value,
         type: null,
         pixEntryAmount: entryAmount,
         pixEntryPaid: false,
         pixRemainingPaid: false,
         cardInstallments: 1,
-        cardPaid: false
+        cardPaid: false,
+        shippingValue
       }
     });
   };
@@ -1947,6 +1984,23 @@ function AddOrderModal({
                     placeholder="0,00"
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Valor do Frete</label>
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">BRL</div>
+                <input 
+                  type="text" 
+                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-12 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
+                  value={shippingValue}
+                  onChange={e => setShippingValue(e.target.value)}
+                  placeholder="0,00"
+                />
               </div>
             </div>
 
@@ -2219,35 +2273,57 @@ function OrderCard({
       {!order.isPartnership && (
         <div className="bg-creme/30 border-t border-rosa/10 p-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex items-center justify-between sm:justify-start gap-3">
-              <span className="text-[10px] font-black text-cinza/60 uppercase">Valor Total:</span>
-              <div className="relative flex-1 sm:flex-initial">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-cinza/40">R$</span>
-                <input 
-                   type="text" 
-                   className="bg-white border-2 border-rosa/30 rounded-xl pl-9 pr-3 py-2 text-sm font-black text-vinho w-full sm:w-32 outline-none focus:border-vinho transition-all"
-                   value={order.payment.totalValue}
-                   onChange={(e) => onUpdatePayment({ totalValue: e.target.value })}
-                   placeholder="0,00"
-                 />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between sm:justify-start gap-3">
+                <span className="text-[10px] font-black text-cinza/60 uppercase">Valor Peça:</span>
+                <div className="relative flex-1 sm:flex-initial">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-cinza/40">R$</span>
+                  <input 
+                     type="text" 
+                     className="bg-white border-2 border-rosa/30 rounded-xl pl-9 pr-3 py-2 text-sm font-black text-vinho w-full sm:w-32 outline-none focus:border-vinho transition-all"
+                     value={order.payment.totalValue}
+                     onChange={(e) => onUpdatePayment({ totalValue: e.target.value })}
+                     placeholder="0,00"
+                   />
+                </div>
+              </div>
+              <div className="flex items-center justify-between sm:justify-start gap-3">
+                <span className="text-[10px] font-black text-cinza/60 uppercase">Frete:</span>
+                <div className="relative flex-1 sm:flex-initial">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-cinza/40">R$</span>
+                  <input 
+                     type="text" 
+                     className="bg-white border-2 border-rosa/30 rounded-xl pl-9 pr-3 py-2 text-sm font-black text-vinho w-full sm:w-32 outline-none focus:border-vinho transition-all"
+                     value={order.payment.shippingValue || ''}
+                     onChange={(e) => onUpdatePayment({ shippingValue: e.target.value })}
+                     placeholder="0,00"
+                   />
+                </div>
               </div>
             </div>
-            <div className="flex items-center justify-between sm:justify-end gap-3">
-              <span className="text-[10px] font-black text-cinza/60 uppercase">Pagamento:</span>
-              <div className="flex bg-white border-2 border-rosa/30 rounded-xl overflow-hidden p-1 shadow-sm">
-                <button 
-                   onClick={() => onUpdatePayment({ type: 'pix' })}
-                   className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${order.payment.type === 'pix' ? 'bg-verde text-white' : 'text-cinza hover:bg-creme'}`}
-                 >
-                   PIX
-                 </button>
-                 <button 
-                   onClick={() => onUpdatePayment({ type: 'card' })}
-                   className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${order.payment.type === 'card' ? 'bg-azul text-white' : 'text-cinza hover:bg-creme'}`}
-                 >
-                   CARTÃO
-                 </button>
+            <div className="flex flex-col justify-between items-end gap-3">
+              <div className="flex items-center justify-between w-full sm:w-auto sm:justify-end gap-3">
+                <span className="text-[10px] font-black text-cinza/60 uppercase">Pagamento:</span>
+                <div className="flex bg-white border-2 border-rosa/30 rounded-xl overflow-hidden p-1 shadow-sm">
+                  <button 
+                     onClick={() => onUpdatePayment({ type: 'pix' })}
+                     className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${order.payment.type === 'pix' ? 'bg-verde text-white' : 'text-cinza hover:bg-creme'}`}
+                   >
+                     PIX
+                   </button>
+                   <button 
+                     onClick={() => onUpdatePayment({ type: 'card' })}
+                     className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${order.payment.type === 'card' ? 'bg-azul text-white' : 'text-cinza hover:bg-creme'}`}
+                   >
+                     CARTÃO
+                   </button>
+                </div>
               </div>
+              {order.payment.shippingValue && parseFloat(order.payment.shippingValue.replace(',', '.')) > 0 && (
+                <div className="text-[9px] font-black text-vinho/70 uppercase tracking-wider text-right w-full">
+                  Total Geral: {formatCurrency((parseFloat(order.payment.totalValue.replace(',', '.')) || 0) + (parseFloat(order.payment.shippingValue.replace(',', '.')) || 0))}
+                </div>
+              )}
             </div>
           </div>
 
