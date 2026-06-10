@@ -66,7 +66,9 @@ serve(async (req) => {
     const appUrl = Deno.env.get("APP_URL") || req.headers.get("origin") || "http://localhost:5173";
     
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card", "pix"],
+      automatic_payment_methods: {
+        enabled: true,
+      },
       mode: "subscription",
       customer_email: user.email,
       client_reference_id: user.id,
