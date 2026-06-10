@@ -3,30 +3,11 @@ import { motion } from 'motion/react';
 import { Check, X, Sparkles, CreditCard, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-const formatCpfCnpj = (value: string) => {
-  const clean = value.replace(/[^\d]/g, '');
-  
-  if (clean.length <= 11) {
-    // CPF: 000.000.000-00
-    if (clean.length <= 3) return clean;
-    if (clean.length <= 6) return `${clean.slice(0, 3)}.${clean.slice(3)}`;
-    if (clean.length <= 9) return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6)}`;
-    return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9, 11)}`;
-  } else {
-    // CNPJ: 00.000.000/0000-00
-    const limited = clean.slice(0, 14);
-    if (limited.length <= 12) {
-      return `${limited.slice(0, 2)}.${limited.slice(2, 5)}.${limited.slice(5, 8)}/${limited.slice(8)}`;
-    }
-    return `${limited.slice(0, 2)}.${limited.slice(2, 5)}.${limited.slice(5, 8)}/${limited.slice(8, 12)}-${limited.slice(12, 14)}`;
-  }
-};
-
 interface SubscriptionModalProps {
   onClose: () => void;
   currentPlan?: string | null; // 'basic', 'premium' ou null
   subscriptionStatus?: string | null; // 'active', 'pending', etc.
-  invoiceUrl?: string | null; // URL da fatura no Asaas
+  invoiceUrl?: string | null; // URL da fatura / checkout
   onSubscriptionUpdated?: () => Promise<void>;
 }
 
@@ -34,7 +15,6 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [cpfCnpj, setCpfCnpj] = useState('');
 
   const isSubscribed = currentPlan && subscriptionStatus === 'active';
   const isPending = currentPlan && subscriptionStatus === 'pending';
@@ -45,24 +25,15 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
       setLoadingPlan(planKey);
       setErrorMessage(null);
 
-      // Validação do CPF/CNPJ
-      const cleanCpfCnpj = cpfCnpj.replace(/[^\d]/g, '');
-      if (!cleanCpfCnpj) {
-        throw new Error('Por favor, insira o seu CPF ou CNPJ de faturamento antes de prosseguir.');
-      }
-      if (cleanCpfCnpj.length !== 11 && cleanCpfCnpj.length !== 14) {
-        throw new Error('Por favor, insira um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.');
-      }
-
       // Obtém a sessão do usuário logado
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('Você precisa estar logado para assinar um plano.');
       }
 
-      // Chama a Edge Function no Supabase para criar a assinatura no Asaas
+      // Chama a Edge Function no Supabase para criar a assinatura na Stripe
       const response = await fetch(
-        `${(import.meta as any).env.VITE_SUPABASE_URL}/functions/v1/create-asaas-subscription`,
+        `${(import.meta as any).env.VITE_SUPABASE_URL}/functions/v1/create-stripe-checkout`,
         {
           method: 'POST',
           headers: {
@@ -72,23 +43,22 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
           body: JSON.stringify({
             planTier: planTier,
             planInterval: planInterval,
-            cpfCnpj: cleanCpfCnpj,
           }),
         }
       );
 
       const data = await response.json();
       if (!response.ok || data.error) {
-        throw new Error(data.error || 'Erro ao gerar checkout com o Asaas.');
+        throw new Error(data.error || 'Erro ao gerar checkout com a Stripe.');
       }
 
       if (data.url) {
-        // Redireciona o usuário para a fatura do Asaas
+        // Redireciona o usuário para o checkout do Stripe
         window.location.href = data.url;
       }
     } catch (err: any) {
-      console.error('Erro de Checkout Asaas:', err);
-      setErrorMessage(err.message || 'Ocorreu um erro inesperado ao conectar ao Asaas.');
+      console.error('Erro de Checkout Stripe:', err);
+      setErrorMessage(err.message || 'Ocorreu um erro inesperado ao conectar à Stripe.');
     } finally {
       setLoadingPlan(null);
     }
@@ -98,7 +68,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
     if (invoiceUrl) {
       window.location.href = invoiceUrl;
     } else {
-      setErrorMessage('Link de faturamento não encontrado. Verifique seu e-mail ou SMS cadastrado no Asaas.');
+      setErrorMessage('Link de checkout ou faturamento não encontrado. Verifique seu e-mail.');
     }
   };
 
@@ -227,25 +197,7 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
           ) : (
             /* Tela de Escolha de Planos */
             <>
-              {/* Campo CPF/CNPJ de faturamento */}
-              <div className="max-w-md mx-auto bg-white rounded-[20px] md:rounded-[24px] p-4 md:p-6 border border-rosa/30 shadow-md space-y-3 mb-6 md:mb-8 text-left">
-                <label className="block text-xs font-black text-vinho uppercase tracking-wider">
-                  CPF ou CNPJ do Titular (Faturamento)
-                </label>
-                <input
-                  type="text"
-                  placeholder="000.000.000-00 ou 00.000.000/0000-00"
-                  value={cpfCnpj}
-                  maxLength={18}
-                  onChange={(e) => {
-                    setCpfCnpj(formatCpfCnpj(e.target.value));
-                  }}
-                  className="w-full bg-creme border-2 border-rosa/30 rounded-2xl px-4 py-3 text-sm text-vinho font-semibold placeholder:text-cinza/40 focus:outline-none focus:border-vinho transition-all"
-                />
-                <p className="text-[10px] text-cinza/70 font-medium leading-normal">
-                  * Necessário para a geração de fatura e Pix de forma segura.
-                </p>
-              </div>
+
 
               {/* Toggle Mensal/Anual */}
               <div className="flex justify-center items-center gap-4">

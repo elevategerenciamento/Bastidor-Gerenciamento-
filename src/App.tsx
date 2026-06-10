@@ -1485,7 +1485,7 @@ export default function App() {
             onClose={() => setIsSubscriptionModalOpen(false)}
             currentPlan={subscription?.plan_tier}
             subscriptionStatus={subscription?.status}
-            invoiceUrl={subscription?.asaas_invoice_url}
+            invoiceUrl={subscription?.stripe_checkout_url || subscription?.asaas_invoice_url}
             onSubscriptionUpdated={async () => {
               if (user) {
                 await fetchSubscription(user.id);
