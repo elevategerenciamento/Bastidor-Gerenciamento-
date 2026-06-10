@@ -43,6 +43,7 @@ import SubscriptionModal from './components/SubscriptionModal';
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [subscription, setSubscription] = useState<any>(null);
@@ -99,7 +100,10 @@ export default function App() {
     });
 
     // Listen for auth changes
-    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsResettingPassword(true);
+      }
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchOrders();
@@ -804,6 +808,24 @@ export default function App() {
       <div className="min-h-screen bg-creme flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-vinho"></div>
       </div>
+    );
+  }
+
+  if (isResettingPassword) {
+    return (
+      <ResetPasswordPage 
+        onReset={async (newPassword) => {
+          try {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+            alert('Senha redefinida com sucesso! Você já está conectada.');
+            setIsResettingPassword(false);
+          } catch (err: any) {
+            alert(err.message);
+          }
+        }} 
+        onClose={() => setIsResettingPassword(false)} 
+      />
     );
   }
 
@@ -1706,8 +1728,89 @@ function HoopLogo({ className = "w-24 h-24" }: { className?: string }) {
   );
 }
 
+function ResetPasswordPage({ onReset, onClose }: { onReset: (password: string) => void; onClose: () => void }) {
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password) {
+      onReset(password);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-creme flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 border-[20px] border-rosa/20 rounded-full" />
+      <div className="absolute bottom-[-5%] left-[-5%] w-48 h-48 border-[15px] border-vinho/5 rounded-full" />
+      
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md text-center z-10"
+      >
+        <div className="flex flex-col items-center mb-8">
+          <div className="text-vinho mb-4">
+            <HoopLogo className="w-32 h-32" />
+          </div>
+          <h1 className="text-5xl font-serif font-black text-vinho tracking-tighter mb-2">bastidor</h1>
+          <p className="text-cinza text-sm font-medium tracking-wide max-w-[250px] mx-auto leading-relaxed">
+            redefinir sua senha de acesso
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="bg-white p-8 rounded-[40px] shadow-2xl border border-rosa/30 space-y-5">
+          <h2 className="text-2xl font-serif font-black text-vinho mb-2">Nova Senha</h2>
+          <p className="text-xs text-cinza mb-4">
+            Digite sua nova senha abaixo para atualizar seu acesso.
+          </p>
+
+          <div className="text-left">
+            <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">Nova Senha</label>
+            <div className="relative">
+              <input 
+                required
+                type={showPassword ? "text" : "password"} 
+                className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 pr-12 text-sm outline-none focus:border-vinho transition-all"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <button 
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-cinza hover:text-vinho transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
+          <button 
+            type="submit"
+            className="w-full bg-vinho text-creme py-5 rounded-2xl font-black text-lg hover:bg-opacity-90 transition-all shadow-xl mt-4 active:scale-95"
+          >
+            salvar nova senha
+          </button>
+
+          <div className="pt-2">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="text-xs font-bold text-cinza hover:text-vinho transition-colors uppercase tracking-widest"
+            >
+              cancelar
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
 function LandingPage({ onEnter }: { onEnter: (name: string, email: string, password?: string, isRegistering?: boolean) => void }) {
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -1715,8 +1818,26 @@ function LandingPage({ onEnter }: { onEnter: (name: string, email: string, passw
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isRecovering) {
+      handleRecoverPassword();
+      return;
+    }
     if ((isRegistering ? name : true) && email && password) {
       onEnter(name, email, password, isRegistering);
+    }
+  };
+
+  const handleRecoverPassword = async () => {
+    if (!email) return;
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      });
+      if (error) throw error;
+      alert('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
+      setIsRecovering(false);
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
@@ -1747,76 +1868,127 @@ function LandingPage({ onEnter }: { onEnter: (name: string, email: string, passw
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white p-8 rounded-[40px] shadow-2xl border border-rosa/30 space-y-5">
-          <AnimatePresence mode="wait">
-            {isRegistering && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="text-left overflow-hidden"
-              >
-                <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">Nome Completo</label>
+          {isRecovering ? (
+            <>
+              <h2 className="text-2xl font-serif font-black text-vinho mb-2">Recuperar Senha</h2>
+              <p className="text-xs text-cinza mb-4">
+                Digite seu e-mail cadastrado para receber as instruções de recuperação.
+              </p>
+              
+              <div className="text-left">
+                <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">E-mail</label>
                 <input 
-                  required={isRegistering}
-                  type="text" 
+                  required
+                  type="email" 
                   className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Como quer ser chamada?"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
                 />
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
 
-          <div className="text-left">
-            <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">E-mail</label>
-            <input 
-              required
-              type="email" 
-              className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-            />
-          </div>
-
-          <div className="text-left">
-            <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">Senha</label>
-            <div className="relative">
-              <input 
-                required
-                type={showPassword ? "text" : "password"} 
-                className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 pr-12 text-sm outline-none focus:border-vinho transition-all"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
               <button 
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-cinza hover:text-vinho transition-colors"
+                type="submit"
+                className="w-full bg-vinho text-creme py-5 rounded-2xl font-black text-lg hover:bg-opacity-90 transition-all shadow-xl mt-4 active:scale-95"
               >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                enviar link de recuperação
               </button>
-            </div>
-          </div>
 
-          <button 
-            type="submit"
-            className="w-full bg-vinho text-creme py-5 rounded-2xl font-black text-lg hover:bg-opacity-90 transition-all shadow-xl mt-4 active:scale-95"
-          >
-            {isRegistering ? 'criar minha conta' : 'entrar no ateliê'}
-          </button>
+              <div className="pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setIsRecovering(false)}
+                  className="text-xs font-bold text-cinza hover:text-vinho transition-colors uppercase tracking-widest"
+                >
+                  voltar para o login
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <AnimatePresence mode="wait">
+                {isRegistering && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="text-left overflow-hidden"
+                  >
+                    <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">Nome Completo</label>
+                    <input 
+                      required={isRegistering}
+                      type="text" 
+                      className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      placeholder="Como quer ser chamada?"
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-          <div className="pt-2">
-            <button 
-              type="button"
-              onClick={() => setIsRegistering(!isRegistering)}
-              className="text-xs font-bold text-cinza hover:text-vinho transition-colors uppercase tracking-widest"
-            >
-              {isRegistering ? 'já tenho uma conta' : 'ainda não tenho conta? cadastrar'}
-            </button>
-          </div>
+              <div className="text-left">
+                <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">E-mail</label>
+                <input 
+                  required
+                  type="email" 
+                  className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                />
+              </div>
+
+              <div className="text-left">
+                <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">Senha</label>
+                <div className="relative">
+                  <input 
+                    required
+                    type={showPassword ? "text" : "password"} 
+                    className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 pr-12 text-sm outline-none focus:border-vinho transition-all"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-cinza hover:text-vinho transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {!isRegistering && (
+                  <div className="text-right mt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setIsRecovering(true)}
+                      className="text-xs font-bold text-cinza hover:text-vinho transition-colors uppercase tracking-widest"
+                    >
+                      esqueceu a senha?
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <button 
+                type="submit"
+                className="w-full bg-vinho text-creme py-5 rounded-2xl font-black text-lg hover:bg-opacity-90 transition-all shadow-xl mt-4 active:scale-95"
+              >
+                {isRegistering ? 'criar minha conta' : 'entrar no ateliê'}
+              </button>
+
+              <div className="pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setIsRegistering(!isRegistering)}
+                  className="text-xs font-bold text-cinza hover:text-vinho transition-colors uppercase tracking-widest"
+                >
+                  {isRegistering ? 'já tenho uma conta' : 'ainda não tenho conta? cadastrar'}
+                </button>
+              </div>
+            </>
+          )}
         </form>
 
         <div className="mt-12 text-[10px] text-cinza font-bold uppercase tracking-[4px] opacity-40">
