@@ -29,7 +29,8 @@ import {
   Settings,
   CreditCard,
   LogOut,
-  Search
+  Search,
+  Truck
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -200,6 +201,7 @@ export default function App() {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [isShippingOpen, setIsShippingOpen] = useState(false);
   const [isCustomRange, setIsCustomRange] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -259,8 +261,7 @@ export default function App() {
 
     orders.forEach(o => {
       if (o.isPartnership) return;
-      const shipping = parseFloat(o.payment.shippingValue?.replace(',', '.') || '0') || 0;
-      const value = (parseFloat(o.payment.totalValue.replace(',', '.')) || 0) + shipping;
+      const value = parseFloat(o.payment.totalValue.replace(',', '.')) || 0;
       const month = o.deadline ? o.deadline.getMonth() : null;
 
       if (month !== null && monthlyTotals[month]) {
@@ -906,6 +907,16 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
+                    setIsShippingOpen(true);
+                    setIsSidebarOpen(false);
+                  }}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
+                >
+                  <Truck className="w-5 h-5" />
+                  <span>Fretes & Envios</span>
+                </button>
+                <button 
+                  onClick={() => {
                     setIsSubscriptionModalOpen(true);
                     setIsSidebarOpen(false);
                   }}
@@ -1515,6 +1526,12 @@ export default function App() {
             }}
           />
         )}
+        {isShippingOpen && (
+          <ShippingModal 
+            orders={orders}
+            onClose={() => setIsShippingOpen(false)}
+          />
+        )}
       </AnimatePresence>
     </div>
   );
@@ -1999,6 +2016,37 @@ function LandingPage({ onEnter }: { onEnter: (name: string, email: string, passw
   );
 }
 
+const ESTADOS_BR = [
+  { value: '', label: 'Selecione o Estado' },
+  { value: 'AC', label: 'Acre (AC)' },
+  { value: 'AL', label: 'Alagoas (AL)' },
+  { value: 'AP', label: 'Amapá (AP)' },
+  { value: 'AM', label: 'Amazonas (AM)' },
+  { value: 'BA', label: 'Bahia (BA)' },
+  { value: 'CE', label: 'Ceará (CE)' },
+  { value: 'DF', label: 'Distrito Federal (DF)' },
+  { value: 'ES', label: 'Espírito Santo (ES)' },
+  { value: 'GO', label: 'Goiás (GO)' },
+  { value: 'MA', label: 'Maranhão (MA)' },
+  { value: 'MT', label: 'Mato Grosso (MT)' },
+  { value: 'MS', label: 'Mato Grosso do Sul (MS)' },
+  { value: 'MG', label: 'Minas Gerais (MG)' },
+  { value: 'PA', label: 'Pará (PA)' },
+  { value: 'PB', label: 'Paraíba (PB)' },
+  { value: 'PR', label: 'Paraná (PR)' },
+  { value: 'PE', label: 'Pernambuco (PE)' },
+  { value: 'PI', label: 'Piauí (PI)' },
+  { value: 'RJ', label: 'Rio de Janeiro (RJ)' },
+  { value: 'RN', label: 'Rio Grande do Norte (RN)' },
+  { value: 'RS', label: 'Rio Grande do Sul (RS)' },
+  { value: 'RO', label: 'Rondônia (RO)' },
+  { value: 'RR', label: 'Roraima (RR)' },
+  { value: 'SC', label: 'Santa Catarina (SC)' },
+  { value: 'SP', label: 'São Paulo (SP)' },
+  { value: 'SE', label: 'Sergipe (SE)' },
+  { value: 'TO', label: 'Tocantins (TO)' }
+];
+
 function AddOrderModal({ 
   onClose, 
   onAdd, 
@@ -2016,6 +2064,7 @@ function AddOrderModal({
   const [value, setValue] = useState(orderToEdit?.payment.totalValue || '');
   const [entryAmount, setEntryAmount] = useState(orderToEdit?.payment.pixEntryAmount || '');
   const [shippingValue, setShippingValue] = useState(orderToEdit?.payment.shippingValue || '');
+  const [shippingState, setShippingState] = useState(orderToEdit?.payment.shippingState || '');
 
   const entryPercentage = useMemo(() => {
     const total = parseFloat(value.replace(',', '.')) || 0;
@@ -2036,7 +2085,7 @@ function AddOrderModal({
       notes,
       deadline: date ? new Date(date + 'T12:00:00') : null,
       isPartnership,
-      payment: orderToEdit ? { ...orderToEdit.payment, totalValue: value, pixEntryAmount: entryAmount, shippingValue } : {
+      payment: orderToEdit ? { ...orderToEdit.payment, totalValue: value, pixEntryAmount: entryAmount, shippingValue, shippingState } : {
         totalValue: value,
         type: null,
         pixEntryAmount: entryAmount,
@@ -2044,7 +2093,8 @@ function AddOrderModal({
         pixRemainingPaid: false,
         cardInstallments: 1,
         cardPaid: false,
-        shippingValue
+        shippingValue,
+        shippingState
       }
     });
   };
@@ -2159,20 +2209,39 @@ function AddOrderModal({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Valor do Frete</label>
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
-                  <CreditCard className="w-4 h-4" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5 flex-1">
+                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Valor do Frete</label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">BRL</div>
+                  <input 
+                    type="text" 
+                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-12 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
+                    value={shippingValue}
+                    onChange={e => setShippingValue(e.target.value)}
+                    placeholder="0,00"
+                  />
                 </div>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">BRL</div>
-                <input 
-                  type="text" 
-                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-12 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
-                  value={shippingValue}
-                  onChange={e => setShippingValue(e.target.value)}
-                  placeholder="0,00"
-                />
+              </div>
+              <div className="space-y-1.5 flex-1">
+                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Estado de Envio</label>
+                <div className="relative group">
+                  <select 
+                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm appearance-none"
+                    value={shippingState}
+                    onChange={e => setShippingState(e.target.value)}
+                  >
+                    {ESTADOS_BR.map(st => (
+                      <option key={st.value} value={st.value}>{st.label}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-rosa">
+                    ▼
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2459,17 +2528,31 @@ function OrderCard({
                    />
                 </div>
               </div>
-              <div className="flex items-center justify-between sm:justify-start gap-3">
-                <span className="text-[10px] font-black text-cinza/60 uppercase">Frete:</span>
-                <div className="relative flex-1 sm:flex-initial">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-cinza/40">R$</span>
-                  <input 
-                     type="text" 
-                     className="bg-white border-2 border-rosa/30 rounded-xl pl-9 pr-3 py-2 text-sm font-black text-vinho w-full sm:w-32 outline-none focus:border-vinho transition-all"
-                     value={order.payment.shippingValue || ''}
-                     onChange={(e) => onUpdatePayment({ shippingValue: e.target.value })}
-                     placeholder="0,00"
-                   />
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black text-cinza/60 uppercase">Frete:</span>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-cinza/40">R$</span>
+                    <input 
+                       type="text" 
+                       className="bg-white border-2 border-rosa/30 rounded-xl pl-9 pr-3 py-2 text-sm font-black text-vinho w-24 outline-none focus:border-vinho transition-all"
+                       value={order.payment.shippingValue || ''}
+                       onChange={(e) => onUpdatePayment({ shippingValue: e.target.value })}
+                       placeholder="0,00"
+                     />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black text-cinza/60 uppercase">UF:</span>
+                  <select 
+                    className="bg-white border-2 border-rosa/30 rounded-xl px-2 py-1.5 text-xs font-black text-vinho outline-none focus:border-vinho transition-all"
+                    value={order.payment.shippingState || ''}
+                    onChange={(e) => onUpdatePayment({ shippingState: e.target.value })}
+                  >
+                    {ESTADOS_BR.map(st => (
+                      <option key={st.value} value={st.value}>{st.value || 'SELECIONE'}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -2867,6 +2950,236 @@ function AddInventoryModal({
             {itemToEdit ? 'Salvar Alterações' : 'Salvar no Estoque'}
           </button>
         </form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+interface ShippingModalProps {
+  orders: Order[];
+  onClose: () => void;
+}
+
+function ShippingModal({ orders, onClose }: ShippingModalProps) {
+  const shippingOrders = useMemo(() => {
+    return orders.filter(o => {
+      const val = parseFloat(o.payment.shippingValue?.replace(',', '.') || '0') || 0;
+      return val > 0;
+    });
+  }, [orders]);
+
+  const totalShippingCost = useMemo(() => {
+    return shippingOrders.reduce((sum, o) => {
+      const val = parseFloat(o.payment.shippingValue?.replace(',', '.') || '0') || 0;
+      return sum + val;
+    }, 0);
+  }, [shippingOrders]);
+
+  const stateStats = useMemo(() => {
+    const stats: Record<string, { count: number; totalValue: number }> = {};
+    shippingOrders.forEach(o => {
+      const uf = o.payment.shippingState || 'N/D';
+      const val = parseFloat(o.payment.shippingValue?.replace(',', '.') || '0') || 0;
+      if (!stats[uf]) {
+        stats[uf] = { count: 0, totalValue: 0 };
+      }
+      stats[uf].count += 1;
+      stats[uf].totalValue += val;
+    });
+
+    return Object.entries(stats)
+      .map(([state, data]) => ({ state, ...data }))
+      .sort((a, b) => b.count - a.count);
+  }, [shippingOrders]);
+
+  const maxCount = useMemo(() => {
+    return Math.max(...stateStats.map(s => s.count), 1);
+  }, [stateStats]);
+
+  const generateShippingPDF = () => {
+    const doc = new jsPDF();
+    
+    doc.setFillColor(74, 55, 40);
+    doc.rect(0, 0, 210, 40, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(26);
+    doc.text('bastidor', 105, 20, { align: 'center' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(217, 197, 178);
+    doc.text('Relatorio Financeiro de Fretes e Envios', 105, 30, { align: 'center' });
+
+    doc.setTextColor(74, 55, 40);
+    doc.setFontSize(14);
+    doc.text('Resumo de Envios', 14, 50);
+
+    const mainState = stateStats[0]?.state || 'Nenhum';
+    
+    autoTable(doc, {
+      startY: 55,
+      head: [['Metrica', 'Consolidado']],
+      body: [
+        ['Total de Pedidos Enviados', shippingOrders.length.toString()],
+        ['Total Gasto em Frete', formatCurrency(totalShippingCost)],
+        ['Estado com Maior Volume de Envio', mainState],
+      ],
+      headStyles: { fillColor: [74, 55, 40] },
+      margin: { left: 14, right: 14 },
+    });
+
+    doc.setFontSize(14);
+    doc.text('Envios por Estado', 14, (doc as any).lastAutoTable.finalY + 12);
+    
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 16,
+      head: [['Estado (UF)', 'Qtd Envios', 'Custo Total de Frete']],
+      body: stateStats.map(s => [s.state, s.count.toString(), formatCurrency(s.totalValue)]),
+      headStyles: { fillColor: [166, 93, 71] },
+      margin: { left: 14, right: 14 },
+    });
+
+    doc.setFontSize(14);
+    doc.text('Listagem Detalhada de Envios', 14, (doc as any).lastAutoTable.finalY + 12);
+    
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 16,
+      head: [['Cliente', 'Peca', 'Estado (UF)', 'Valor Frete']],
+      body: shippingOrders.map(o => [
+        o.customerName,
+        o.pieceDescription,
+        o.payment.shippingState || 'N/D',
+        formatCurrency(parseFloat(o.payment.shippingValue?.replace(',', '.') || '0') || 0)
+      ]),
+      headStyles: { fillColor: [74, 55, 40] },
+      margin: { left: 14, right: 14 },
+    });
+
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(9);
+      doc.setTextColor(150);
+      doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} - Pagina ${i} de ${pageCount}`, 105, 285, { align: 'center' });
+    }
+
+    doc.save('Relatorio_Fretes_Bastidor.pdf');
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-vinho/80 backdrop-blur-xl z-[150] flex flex-col pt-10"
+      onClick={onClose}
+    >
+      <motion.div 
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="flex-1 bg-creme rounded-t-[48px] shadow-2xl border-t-4 border-rosa flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-8 bg-vinho text-white">
+          <div className="max-w-2xl mx-auto flex justify-between items-center">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="bg-rosa/20 p-2 rounded-xl backdrop-blur-sm">
+                  <Truck className="w-8 h-8 text-rosa" />
+                </div>
+                <h2 className="text-3xl font-serif font-black lowercase tracking-tighter">fretes</h2>
+              </div>
+              <p className="text-rosa/60 text-xs uppercase tracking-widest font-bold">controle financeiro de fretes</p>
+            </div>
+            <button onClick={onClose} className="p-3 hover:bg-white/10 rounded-full transition-all">
+              <X className="w-8 h-8" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto max-w-2xl mx-auto w-full p-6 md:p-8 space-y-6 custom-scrollbar">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white p-5 rounded-[24px] border-2 border-rosa/20 shadow-sm">
+              <span className="text-[10px] text-cinza font-black uppercase tracking-wider block mb-1">Total de Envios</span>
+              <span className="text-3xl font-serif font-black text-vinho">{shippingOrders.length}</span>
+              <span className="text-[10px] text-cinza opacity-50 block mt-1">pedidos com frete cadastrado</span>
+            </div>
+            <div className="bg-white p-5 rounded-[24px] border-2 border-rosa/20 shadow-sm">
+              <span className="text-[10px] text-cinza font-black uppercase tracking-wider block mb-1">Custo Total de Fretes</span>
+              <span className="text-3xl font-serif font-black text-verde">{formatCurrency(totalShippingCost)}</span>
+              <span className="text-[10px] text-cinza opacity-50 block mt-1">investimento total de logistica</span>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-[32px] border-2 border-rosa/20 shadow-sm space-y-4">
+            <h3 className="text-lg font-serif text-vinho font-black">Envios por Estado</h3>
+            {stateStats.length > 0 ? (
+              <div className="space-y-3">
+                {stateStats.map(stat => {
+                  const percentage = Math.round((stat.count / maxCount) * 100);
+                  return (
+                    <div key={stat.state} className="flex items-center gap-3">
+                      <div className="w-8 text-xs font-black text-vinho">{stat.state}</div>
+                      <div className="flex-1 bg-creme h-6 rounded-full overflow-hidden relative flex items-center px-2">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${percentage}%` }}
+                          transition={{ duration: 0.8, ease: "easeOut" }}
+                          className="absolute left-0 top-0 bottom-0 bg-vinho/20 rounded-full"
+                        />
+                        <span className="relative z-10 text-[10px] font-bold text-vinho">{stat.count} {stat.count === 1 ? 'envio' : 'envios'}</span>
+                      </div>
+                      <div className="w-20 text-right text-xs font-bold text-cinza">{formatCurrency(stat.totalValue)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-cinza italic text-center py-6">Nenhum envio cadastrado ainda para gerar o grafico.</p>
+            )}
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between pt-2">
+            <h3 className="text-xl font-serif text-vinho border-l-4 border-dourado pl-3">Lista de Envios</h3>
+            <button 
+              onClick={generateShippingPDF}
+              disabled={shippingOrders.length === 0}
+              className="bg-dourado text-white px-6 py-3.5 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all w-full sm:w-auto uppercase tracking-widest disabled:opacity-50 disabled:scale-100"
+            >
+              <Download className="w-4 h-4" />
+              Exportar Relatorio PDF
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 pb-12">
+            {shippingOrders.map(order => (
+              <div key={order.id} className="bg-white p-4 rounded-2xl border border-rosa/20 shadow-sm flex justify-between items-center">
+                <div>
+                  <h4 className="font-bold text-vinho text-sm">{order.customerName}</h4>
+                  <p className="text-[10px] text-cinza uppercase tracking-wider">{order.pieceDescription}</p>
+                  <span className="inline-block text-[9px] font-black bg-rosa/20 text-vinho px-2 py-0.5 rounded mt-1.5 uppercase">
+                    Estado: {order.payment.shippingState || 'N/D'}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-lg font-serif font-black text-vinho">
+                    {formatCurrency(parseFloat(order.payment.shippingValue?.replace(',', '.') || '0') || 0)}
+                  </span>
+                  <span className="block text-[8px] text-cinza font-bold uppercase tracking-widest mt-0.5">Valor do Frete</span>
+                </div>
+              </div>
+            ))}
+            {shippingOrders.length === 0 && (
+              <div className="text-center py-12 bg-white/50 rounded-2xl border-2 border-dashed border-rosa/30">
+                <p className="text-cinza text-sm italic">Nenhum frete cadastrado ate o momento.</p>
+              </div>
+            )}
+          </div>
+        </div>
       </motion.div>
     </motion.div>
   );
