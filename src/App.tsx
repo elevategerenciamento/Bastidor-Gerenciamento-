@@ -2221,9 +2221,25 @@ function AddOrderModal({
                     type="text" 
                     className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-12 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
                     value={shippingValue}
-                    onChange={e => setShippingValue(e.target.value)}
+                    onChange={e => setShippingValue(e.target.value.replace(/[^0-9,.]/g, ''))}
                     placeholder="0,00"
                   />
+                </div>
+                <div className="flex items-center gap-2 mt-1.5 ml-1">
+                  <input 
+                    type="checkbox" 
+                    id="freeShippingAdd"
+                    checked={shippingValue === '0,00' || shippingValue === '0'}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setShippingValue('0,00');
+                      } else {
+                        setShippingValue('');
+                      }
+                    }}
+                    className="rounded text-vinho focus:ring-vinho cursor-pointer w-4 h-4"
+                  />
+                  <label htmlFor="freeShippingAdd" className="text-[10px] font-bold text-cinza uppercase cursor-pointer select-none">Envio Grátis</label>
                 </div>
               </div>
               <div className="space-y-1.5 flex-1">
@@ -2528,7 +2544,7 @@ function OrderCard({
                    />
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex flex-wrap gap-3 items-center">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-black text-cinza/60 uppercase">Frete:</span>
                   <div className="relative">
@@ -2537,10 +2553,20 @@ function OrderCard({
                        type="text" 
                        className="bg-white border-2 border-rosa/30 rounded-xl pl-9 pr-3 py-2 text-sm font-black text-vinho w-24 outline-none focus:border-vinho transition-all"
                        value={order.payment.shippingValue || ''}
-                       onChange={(e) => onUpdatePayment({ shippingValue: e.target.value })}
+                       onChange={(e) => onUpdatePayment({ shippingValue: e.target.value.replace(/[^0-9,.]/g, '') })}
                        placeholder="0,00"
                      />
                   </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input 
+                    type="checkbox" 
+                    id={`freeShippingCard-${order.id}`}
+                    checked={order.payment.shippingValue === '0,00' || order.payment.shippingValue === '0'}
+                    onChange={e => onUpdatePayment({ shippingValue: e.target.checked ? '0,00' : '' })}
+                    className="rounded text-vinho focus:ring-vinho cursor-pointer w-3.5 h-3.5"
+                  />
+                  <label htmlFor={`freeShippingCard-${order.id}`} className="text-[9px] font-black text-cinza/60 uppercase cursor-pointer select-none">Envio Grátis</label>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-black text-cinza/60 uppercase">UF:</span>
