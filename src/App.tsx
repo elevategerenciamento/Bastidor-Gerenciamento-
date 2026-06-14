@@ -30,7 +30,8 @@ import {
   CreditCard,
   LogOut,
   Search,
-  Truck
+  Truck,
+  HelpCircle
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -202,6 +203,7 @@ export default function App() {
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isShippingOpen, setIsShippingOpen] = useState(false);
+  const [isUrgencyInfoOpen, setIsUrgencyInfoOpen] = useState(false);
   const [isCustomRange, setIsCustomRange] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -237,7 +239,7 @@ export default function App() {
     const activeOrders = orders.filter(o => !o.completed && !o.isPartnership);
     const urgentCount = activeOrders.filter(o => {
       const days = getDaysRemaining(o.deadline);
-      return days !== null && days <= 3;
+      return days !== null && days <= 10;
     }).length;
 
     let totalReceived = 0;
@@ -1318,51 +1320,75 @@ export default function App() {
 
         {/* Urgent Alerts */}
         <AnimatePresence>
-          {stats.urgentCount > 0 && (
-            <motion.section 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-[#fff5f5] border-2 border-vermelho rounded-2xl overflow-hidden"
-            >
-              <div className="bg-vermelho text-white px-4 py-2 text-xs font-bold tracking-widest uppercase flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
-                Atenção Imediata
-              </div>
-              <div className="divide-y divide-[#fce4e4]">
-                {orders.filter(o => !o.completed && !o.isPartnership && getDaysRemaining(o.deadline) !== null && (getDaysRemaining(o.deadline) || 0) <= 3).map(o => {
-                  const days = getDaysRemaining(o.deadline);
-                  return (
-                    <div key={o.id} className="p-4 flex justify-between items-center group">
-                      <div className="flex-1">
-                        <div className="font-semibold text-sm">{o.customerName}</div>
-                        <div className="text-xs text-cinza">{o.pieceDescription}</div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            onClick={() => setEditingOrder(o)}
-                            className="p-1.5 text-cinza hover:text-vinho hover:bg-creme rounded-lg transition-all"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            onClick={() => deleteOrder(o.id)}
-                            className="p-1.5 text-cinza hover:text-vermelho hover:bg-vermelho/10 rounded-lg transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+          {stats.urgentCount > 0 && (() => {
+            const urgentOrders = orders.filter(o => !o.completed && !o.isPartnership && getDaysRemaining(o.deadline) !== null && (getDaysRemaining(o.deadline) || 0) <= 10);
+            const hasRedAlert = urgentOrders.some(o => (getDaysRemaining(o.deadline) || 0) <= 5);
+            
+            const headerBg = hasRedAlert ? 'bg-vermelho' : 'bg-laranja';
+            const borderClass = hasRedAlert ? 'border-vermelho/30' : 'border-laranja/30';
+            const containerBg = hasRedAlert ? 'bg-[#fffcfb]' : 'bg-[#fffdfa]';
+            const dividerClass = hasRedAlert ? 'divide-vermelho/10' : 'divide-laranja/10';
+
+            return (
+              <motion.section 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className={`${containerBg} border-2 ${borderClass} rounded-2xl overflow-hidden shadow-sm`}
+              >
+                <div className={`${headerBg} text-white px-4 py-3 text-xs font-bold tracking-widest uppercase flex items-center justify-between transition-all`}>
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-white" />
+                    <span>Atenção Imediata</span>
+                  </div>
+                  <button 
+                    onClick={() => setIsUrgencyInfoOpen(true)}
+                    className="p-1 hover:bg-white/15 rounded-full transition-all text-white/80 hover:text-white"
+                    title="Explicar cores de urgência"
+                  >
+                    <HelpCircle className="w-4.5 h-4.5" />
+                  </button>
+                </div>
+                <div className={`divide-y ${dividerClass}`}>
+                  {urgentOrders.map(o => {
+                    const days = getDaysRemaining(o.deadline);
+                    const isRed = days !== null && days <= 5;
+                    const badgeBg = isRed ? 'bg-vermelho' : 'bg-laranja';
+                    const itemBorderClass = isRed ? 'border-l-4 border-vermelho' : 'border-l-4 border-laranja';
+                    const itemBg = isRed ? 'hover:bg-vermelho/5' : 'hover:bg-laranja/5';
+                    
+                    return (
+                      <div key={o.id} className={`p-4 flex justify-between items-center group transition-colors ${itemBorderClass} ${itemBg}`}>
+                        <div className="flex-1">
+                          <div className="font-semibold text-sm text-vinho">{o.customerName}</div>
+                          <div className="text-xs text-cinza">{o.pieceDescription}</div>
                         </div>
-                        <div className="bg-vermelho text-white text-[10px] px-2 py-1 rounded-full font-bold">
-                          {days === 0 ? 'HOJE!' : days! < 0 ? `${Math.abs(days!)}d atrasado` : `${days}d`}
+                        <div className="flex items-center gap-3">
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => setEditingOrder(o)}
+                              className="p-1.5 text-cinza hover:text-vinho hover:bg-creme rounded-lg transition-all"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={() => deleteOrder(o.id)}
+                              className="p-1.5 text-cinza hover:text-vermelho hover:bg-vermelho/10 rounded-lg transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <div className={`${badgeBg} text-white text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-wider shadow-sm`}>
+                            {days === 0 ? 'HOJE!' : days! < 0 ? `${Math.abs(days!)}d atrasado` : `${days}d`}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.section>
-          )}
+                    );
+                  })}
+                </div>
+              </motion.section>
+            );
+          })()}
         </AnimatePresence>
 
         {/* Orders List */}
@@ -1531,6 +1557,53 @@ export default function App() {
             orders={orders}
             onClose={() => setIsShippingOpen(false)}
           />
+        )}
+        {isUrgencyInfoOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-vinho/60 backdrop-blur-md z-[200] flex items-center justify-center p-4"
+            onClick={() => setIsUrgencyInfoOpen(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-creme max-w-sm w-full rounded-[32px] p-6 shadow-2xl border-2 border-rosa/30 text-center"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="bg-vinho/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4">
+                <HelpCircle className="w-6 h-6 text-vinho" />
+              </div>
+              <h3 className="text-xl font-serif font-black text-vinho mb-3">Cores de Urgência</h3>
+              <p className="text-cinza text-xs mb-6 leading-relaxed">
+                Para ajudar você a gerenciar seus prazos, os pedidos ativos são sinalizados automaticamente de acordo com os dias restantes:
+              </p>
+              <div className="space-y-3 mb-6 text-left">
+                <div className="flex items-start gap-3 p-3 bg-white rounded-2xl border border-rosa/20">
+                  <div className="w-3.5 h-3.5 rounded-full bg-vermelho shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-xs font-black text-vermelho uppercase tracking-wider">Urgência Crítica (Até 5 dias)</div>
+                    <div className="text-[10px] text-cinza">Pedidos que precisam ser produzidos ou despachados com prioridade máxima.</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-white rounded-2xl border border-rosa/20">
+                  <div className="w-3.5 h-3.5 rounded-full bg-laranja shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-xs font-black text-laranja uppercase tracking-wider">Atenção Moderada (6 a 10 dias)</div>
+                    <div className="text-[10px] text-cinza">Pedidos com prazos intermediários para você planejar sua produção sem pressa.</div>
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsUrgencyInfoOpen(false)}
+                className="w-full bg-vinho text-white py-3.5 rounded-xl font-black text-xs hover:bg-opacity-95 transition-all shadow-md uppercase tracking-wider"
+              >
+                Entendi, fechar
+              </button>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
