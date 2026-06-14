@@ -2987,12 +2987,27 @@ interface ShippingModalProps {
 }
 
 function ShippingModal({ orders, onClose }: ShippingModalProps) {
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+
   const shippingOrders = useMemo(() => {
     return orders.filter(o => {
       const val = parseFloat(o.payment.shippingValue?.replace(',', '.') || '0') || 0;
-      return val > 0;
+      if (val <= 0) return false;
+
+      if (startDate) {
+        const start = new Date(startDate + 'T00:00:00');
+        if (!o.deadline || o.deadline < start) return false;
+      }
+
+      if (endDate) {
+        const end = new Date(endDate + 'T23:59:59');
+        if (!o.deadline || o.deadline > end) return false;
+      }
+
+      return true;
     });
-  }, [orders]);
+  }, [orders, startDate, endDate]);
 
   const totalShippingCost = useMemo(() => {
     return shippingOrders.reduce((sum, o) => {
@@ -3036,7 +3051,14 @@ function ShippingModal({ orders, onClose }: ShippingModalProps) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(217, 197, 178);
-    doc.text('Relatorio Financeiro de Fretes e Envios', 105, 30, { align: 'center' });
+
+    let periodLabel = 'Relatorio Financeiro de Fretes e Envios';
+    if (startDate || endDate) {
+      const startFmt = startDate ? new Date(startDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'Início';
+      const endFmt = endDate ? new Date(endDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'Fim';
+      periodLabel += ` (${startFmt} a ${endFmt})`;
+    }
+    doc.text(periodLabel, 105, 30, { align: 'center' });
 
     doc.setTextColor(74, 55, 40);
     doc.setFontSize(14);
@@ -3128,6 +3150,42 @@ function ShippingModal({ orders, onClose }: ShippingModalProps) {
         </div>
 
         <div className="flex-1 overflow-y-auto max-w-2xl mx-auto w-full p-6 md:p-8 space-y-6 custom-scrollbar">
+          {/* Filtro de Período */}
+          <div className="bg-white p-5 rounded-[24px] border-2 border-rosa/20 shadow-sm space-y-4">
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="w-4 h-4 text-vinho" />
+              <h3 className="text-xs font-serif font-black text-vinho uppercase tracking-wider">Filtrar por Período</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[9px] font-black text-cinza uppercase ml-1">De</label>
+                <input 
+                  type="date"
+                  className="w-full bg-creme/30 border-2 border-rosa/20 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-vinho focus:bg-white transition-all text-vinho font-bold"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[9px] font-black text-cinza uppercase ml-1">Até</label>
+                <input 
+                  type="date"
+                  className="w-full bg-creme/30 border-2 border-rosa/20 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-vinho focus:bg-white transition-all text-vinho font-bold"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+            {(startDate || endDate) && (
+              <button 
+                onClick={() => { setStartDate(''); setEndDate(''); }}
+                className="text-[9px] font-black text-vermelho hover:underline block ml-1 uppercase tracking-wider"
+              >
+                Limpar Filtro
+              </button>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-white p-5 rounded-[24px] border-2 border-rosa/20 shadow-sm">
               <span className="text-[10px] text-cinza font-black uppercase tracking-wider block mb-1">Total de Envios</span>
