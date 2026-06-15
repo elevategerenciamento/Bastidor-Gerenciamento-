@@ -31,7 +31,8 @@ import {
   LogOut,
   Search,
   Truck,
-  HelpCircle
+  HelpCircle,
+  ShieldCheck
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -42,6 +43,8 @@ import { formatCurrency, getDaysRemaining, getStatusColor } from './lib/utils';
 import { supabase } from './lib/supabase';
 import SubscriptionModal from './components/SubscriptionModal';
 import TrialExpiredModal from './components/TrialExpiredModal';
+import SettingsModal from './components/SettingsModal';
+import SecurityPrivacyModal from './components/SecurityPrivacyModal';
 
 
 export default function App() {
@@ -282,6 +285,8 @@ export default function App() {
   const [isCustomRange, setIsCustomRange] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSecurityOpen, setIsSecurityOpen] = useState(false);
 
   const reportMonths = useMemo(() => {
     const cur = TODAY.getMonth();
@@ -1321,11 +1326,24 @@ export default function App() {
                   )}
                 </button>
                 <button 
-                  onClick={() => setIsSidebarOpen(false)}
+                  onClick={() => {
+                    setIsSettingsOpen(true);
+                    setIsSidebarOpen(false);
+                  }}
                   className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
                 >
                   <Settings className="w-5 h-5" />
                   <span>Configurações</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setIsSecurityOpen(true);
+                    setIsSidebarOpen(false);
+                  }}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-verde/90 hover:bg-verde/10 transition-all font-bold"
+                >
+                  <ShieldCheck className="w-5 h-5" />
+                  <span>Segurança e Privacidade</span>
                 </button>
               </nav>
 
@@ -1973,6 +1991,17 @@ export default function App() {
                 await fetchSubscription(user.id);
               }
             }}
+          />
+        )}
+        {isSettingsOpen && (
+          <SettingsModal 
+            onClose={() => setIsSettingsOpen(false)}
+            userEmail={user?.email}
+          />
+        )}
+        {isSecurityOpen && (
+          <SecurityPrivacyModal 
+            onClose={() => setIsSecurityOpen(false)}
           />
         )}
         {isShippingOpen && (
