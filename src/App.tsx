@@ -1219,7 +1219,17 @@ export default function App() {
           if (error) throw error;
         }
       } catch (err: any) {
-        alert(err.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos' : err.message);
+        const authErrors: Record<string, string> = {
+          'Invalid login credentials': 'E-mail ou senha incorretos.',
+          'User already registered': 'Este e-mail já possui uma conta cadastrada. Clique em "já tenho uma conta" para entrar.',
+          'Email already in use': 'Este e-mail já está em uso. Tente fazer login.',
+          'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres.',
+          'Unable to validate email address: invalid format': 'Formato de e-mail inválido.',
+          'Email rate limit exceeded': 'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+          'For security purposes, you can only request this after': 'Por segurança, aguarde antes de tentar novamente.',
+        };
+        const msg = authErrors[err.message] || err.message;
+        alert(msg);
       }
     }} />;
   }
