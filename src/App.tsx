@@ -35,11 +35,13 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 import { INITIAL_ORDERS, TODAY } from './constants';
 import { Order, PaymentInfo, InventoryItem } from './types';
 import { formatCurrency, getDaysRemaining, getStatusColor } from './lib/utils';
 import { supabase } from './lib/supabase';
 import SubscriptionModal from './components/SubscriptionModal';
+import TrialExpiredModal from './components/TrialExpiredModal';
 
 
 export default function App() {
@@ -49,9 +51,18 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [subscription, setSubscription] = useState<any>(null);
+  const [trialInfo, setTrialInfo] = useState<any>(null);
   const [pdfDownloadCount, setPdfDownloadCount] = useState<number>(0);
+  const [xlsDownloadCount, setXlsDownloadCount] = useState<number>(0);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [subscriptionMessage, setSubscriptionMessage] = useState<string | null>(null);
+
+  // Calcula dias restantes do trial (null = sem info, negativo = expirado)
+  const trialDaysRemaining = trialInfo
+    ? Math.floor((new Date(trialInfo.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+  const isTrialExpired = trialDaysRemaining !== null && trialDaysRemaining < 0;
+  const isOnTrial = trialDaysRemaining !== null && trialDaysRemaining >= 0;
 
   const fetchSubscription = async (userId: string) => {
     try {
@@ -68,22 +79,80 @@ export default function App() {
     }
   };
 
+  const fetchTrialInfo = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('trial_started_at, trial_ends_at, phone_number')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      setTrialInfo(data);
+    } catch (err) {
+      console.error('Error fetching trial info:', err);
+    }
+  };
+
   const fetchPdfDownloadCount = async (userId: string) => {
     try {
-      const startOfMonth = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1).toISOString();
-      const endOfMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0, 23, 59, 59).toISOString();
+      // Busca a assinatura para saber se é trial ou assinante
+      const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('status')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-      const { count, error } = await supabase
+      const isSubscriber = sub && sub.status === 'active';
+
+      let query = supabase
         .from('pdf_downloads')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .gte('downloaded_at', startOfMonth)
-        .lte('downloaded_at', endOfMonth);
+        .eq('user_id', userId);
 
+      // Assinantes: conta só o mês atual. Trial: conta todos (desde sempre)
+      if (isSubscriber) {
+        const startOfMonth = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1).toISOString();
+        const endOfMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0, 23, 59, 59).toISOString();
+        query = query.gte('downloaded_at', startOfMonth).lte('downloaded_at', endOfMonth);
+      }
+
+      const { count, error } = await query;
       if (error) throw error;
       setPdfDownloadCount(count || 0);
     } catch (err) {
       console.error('Error fetching PDF download count:', err);
+    }
+  };
+
+  const fetchXlsDownloadCount = async (userId: string) => {
+    try {
+      // Busca a assinatura para saber se é trial ou assinante
+      const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('status')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      const isSubscriber = sub && sub.status === 'active';
+
+      let query = supabase
+        .from('xls_downloads')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+      // Assinantes: conta só o mês atual. Trial: conta todos (desde sempre)
+      if (isSubscriber) {
+        const startOfMonth = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1).toISOString();
+        const endOfMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0, 23, 59, 59).toISOString();
+        query = query.gte('downloaded_at', startOfMonth).lte('downloaded_at', endOfMonth);
+      }
+
+      const { count, error } = await query;
+      if (error) throw error;
+      setXlsDownloadCount(count || 0);
+    } catch (err) {
+      console.error('Error fetching XLS download count:', err);
     }
   };
 
@@ -95,7 +164,9 @@ export default function App() {
         fetchOrders();
         fetchInventory();
         fetchSubscription(session.user.id);
+        fetchTrialInfo(session.user.id);
         fetchPdfDownloadCount(session.user.id);
+        fetchXlsDownloadCount(session.user.id);
       } else {
         setLoading(false);
       }
@@ -111,11 +182,15 @@ export default function App() {
         fetchOrders();
         fetchInventory();
         fetchSubscription(session.user.id);
+        fetchTrialInfo(session.user.id);
         fetchPdfDownloadCount(session.user.id);
+        fetchXlsDownloadCount(session.user.id);
       } else {
         setOrders([]);
         setSubscription(null);
+        setTrialInfo(null);
         setPdfDownloadCount(0);
+        setXlsDownloadCount(0);
         setLoading(false);
       }
     });
@@ -417,8 +492,9 @@ export default function App() {
     const isPremium = subscription && subscription.status === 'active' && subscription.plan_tier === 'premium';
     const isFree = !subscription || subscription.status !== 'active';
 
-    if (isFree && orders.length >= 3) {
-      alert("Limite de 3 pedidos atingido no Plano Gratuito! Faça a sua assinatura para continuar cadastrando.");
+    // No trial ou sem plano, limite de 5 pedidos
+    if (isFree && orders.length >= 5) {
+      alert("Limite de 5 pedidos atingido no período de teste! Assine um plano para continuar cadastrando.");
       setIsAddingOrder(false);
       setIsSubscriptionModalOpen(true);
       return;
@@ -608,8 +684,9 @@ export default function App() {
     const isFree = !subscription || subscription.status !== 'active';
 
     if (isFree) {
+      // No trial: limite de 1 PDF no total do período (contagem total, não mensal)
       if (pdfDownloadCount >= 1) {
-        alert("Você atingiu o limite de 1 download de relatório PDF de teste no Plano Gratuito! Faça a sua assinatura para continuar gerando relatórios.");
+        alert("Você já utilizou seu relatório PDF de teste! Assine um plano para gerar relatórios ilimitados.");
         setIsSubscriptionModalOpen(true);
         return;
       }
@@ -804,6 +881,246 @@ export default function App() {
       }
     }
   };
+
+  const generateXLS = async () => {
+    // 1. Verificações de limites de XLS
+    const isBasic = subscription && subscription.status === 'active' && subscription.plan_tier === 'basic';
+    const isPremium = subscription && subscription.status === 'active' && subscription.plan_tier === 'premium';
+    const isFree = !subscription || subscription.status !== 'active';
+
+    if (isFree) {
+      // No trial: permite 1 planilha XLS no total do período
+      if (xlsDownloadCount >= 1) {
+        alert("Você já utilizou sua planilha XLS de teste! Assine um plano para exportar planilhas ilimitadas.");
+        setIsSubscriptionModalOpen(true);
+        return;
+      }
+    } else if (isBasic) {
+      if (isCustomRange) {
+        alert("Relatórios personalizados por período são exclusivos do Plano Premium! Faça o upgrade para liberar.");
+        setIsSubscriptionModalOpen(true);
+        return;
+      }
+      if (xlsDownloadCount >= 1) {
+        alert("Você atingiu o limite de 1 download de relatório XLS este mês no Plano Básico! Faça o upgrade para o Plano Premium para ter downloads ilimitados.");
+        setIsSubscriptionModalOpen(true);
+        return;
+      }
+    }
+
+    let filteredInventory: InventoryItem[] = [];
+    let periodLabel = '';
+
+    if (isCustomRange && startDate && endDate) {
+      const startParts = startDate.split('-');
+      const start = new Date(parseInt(startParts[0]), parseInt(startParts[1]) - 1, parseInt(startParts[2]), 0, 0, 0);
+      const endParts = endDate.split('-');
+      const end = new Date(parseInt(endParts[0]), parseInt(endParts[1]) - 1, parseInt(endParts[2]), 23, 59, 59);
+      
+      periodLabel = `${start.toLocaleDateString('pt-BR')} a ${end.toLocaleDateString('pt-BR')}`;
+      filteredInventory = inventory.filter(i => i.purchaseDate >= start && i.purchaseDate <= end);
+    } else {
+      const monthDate = new Date(TODAY.getFullYear(), reportMonth, 1);
+      const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(monthDate);
+      periodLabel = `${monthName} ${TODAY.getFullYear()}`;
+      
+      const start = new Date(TODAY.getFullYear(), reportMonth, 1, 0, 0, 0);
+      const end = new Date(TODAY.getFullYear(), reportMonth + 1, 0, 23, 59, 59);
+
+      filteredInventory = inventory.filter(i => i.purchaseDate >= start && i.purchaseDate <= end);
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Balanço');
+
+      // Colunas
+      worksheet.columns = [
+        { header: 'Data', key: 'date', width: 15 },
+        { header: 'Descrição', key: 'description', width: 35 },
+        { header: 'Pagamento', key: 'payment', width: 15 },
+        { header: 'Status', key: 'status', width: 12 },
+        { header: 'Qtd', key: 'qtd', width: 10 },
+        { header: 'Valor (R$)', key: 'value', width: 18 }
+      ];
+
+      // Estilo do cabeçalho
+      const headerRow = worksheet.getRow(1);
+      headerRow.height = 24;
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF4A3728' } // Marrom do ateliê
+        };
+        cell.font = {
+          color: { argb: 'FFFFFFFF' },
+          bold: true,
+          name: 'Calibri',
+          size: 11
+        };
+        cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+          left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+          bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+          right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
+        };
+      });
+
+      // Adicionar linhas de dados
+      filteredInventory.forEach((item, index) => {
+        const rowData = {
+          date: item.purchaseDate.toLocaleDateString('pt-BR'),
+          description: item.name,
+          payment: item.paymentMethod === 'pix' ? 'Pix' : item.paymentMethod === 'card' ? 'Cartão' : 'Dinheiro',
+          status: 'Quitado',
+          qtd: parseFloat(item.quantity.replace(',', '.')) || 0,
+          value: parseFloat(item.price.replace(',', '.')) || 0
+        };
+
+        const row = worksheet.addRow(rowData);
+        row.height = 20;
+
+        const isEven = index % 2 === 1;
+        const bgColor = isEven ? 'FFF2F5F9' : 'FFFFFFFF';
+
+        row.eachCell((cell, colNumber) => {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: bgColor }
+          };
+          cell.font = { name: 'Calibri', size: 11 };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+            left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+            bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+            right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
+          };
+
+          if (colNumber === 1 || colNumber === 3 || colNumber === 4) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          } else if (colNumber === 2) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          } else if (colNumber === 5) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+            cell.numFmt = '#,##0.00';
+          } else if (colNumber === 6) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+            cell.numFmt = '"R$ " #,##0.00';
+          }
+        });
+      });
+
+      const totalQtd = filteredInventory.reduce((acc, item) => acc + (parseFloat(item.quantity.replace(',', '.')) || 0), 0);
+      const totalValue = filteredInventory.reduce((acc, item) => acc + (parseFloat(item.price.replace(',', '.')) || 0), 0);
+
+      // Linha TOTAL GERAL
+      const totalRow = worksheet.addRow({
+        date: 'TOTAL GERAL',
+        description: '',
+        payment: '',
+        status: '',
+        qtd: totalQtd,
+        value: totalValue
+      });
+      totalRow.height = 20;
+      totalRow.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Calibri', size: 11, bold: true };
+        cell.border = {
+          top: { style: 'double', color: { argb: 'FF000000' } },
+          bottom: { style: 'double', color: { argb: 'FF000000' } }
+        };
+        if (colNumber === 1) {
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        } else if (colNumber === 5) {
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          cell.numFmt = '#,##0.00';
+        } else if (colNumber === 6) {
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          cell.numFmt = '"R$ " #,##0.00';
+        }
+      });
+
+      // Linha SUBTOTAL QUITADOS
+      const subtotalQuitadosRow = worksheet.addRow({
+        date: 'SUBTOTAL QUITADOS',
+        description: '',
+        payment: '',
+        status: '',
+        qtd: '',
+        value: totalValue
+      });
+      subtotalQuitadosRow.height = 20;
+      subtotalQuitadosRow.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Calibri', size: 11, bold: true };
+        cell.border = {
+          top: { style: 'double', color: { argb: 'FF000000' } },
+          bottom: { style: 'double', color: { argb: 'FF000000' } }
+        };
+        if (colNumber === 1) {
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        } else if (colNumber === 6) {
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          cell.numFmt = '"R$ " #,##0.00';
+        }
+      });
+
+      // Linha SUBTOTAL PENDENTES
+      const subtotalPendentesRow = worksheet.addRow({
+        date: 'SUBTOTAL PENDENTES',
+        description: '',
+        payment: '',
+        status: '',
+        qtd: '',
+        value: 0
+      });
+      subtotalPendentesRow.height = 20;
+      subtotalPendentesRow.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Calibri', size: 11, bold: true };
+        cell.border = {
+          top: { style: 'double', color: { argb: 'FF000000' } },
+          bottom: { style: 'double', color: { argb: 'FF000000' } }
+        };
+        if (colNumber === 1) {
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        } else if (colNumber === 6) {
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          cell.numFmt = '"R$ " #,##0.00';
+        }
+      });
+
+      // Salvar
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `Relatorio_Financeiro_Bastidor_${periodLabel.replace(/ /g, '_')}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+
+      // Registrar download de XLS (trial ou básico)
+      if (isFree || isBasic) {
+        try {
+          const { error } = await supabase
+            .from('xls_downloads')
+            .insert([{ user_id: user.id }]);
+          
+          if (!error) {
+            setXlsDownloadCount(prev => prev + 1);
+          }
+        } catch (err) {
+          console.error('Erro ao registrar cota de download de XLS:', err);
+        }
+      }
+
+    } catch (error) {
+      console.error('Erro ao gerar planilha XLS:', error);
+      alert('Ocorreu um erro ao gerar a planilha.');
+    }
+  };
+
   const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(TODAY.getFullYear(), reportMonth));
 
   if (loading) {
@@ -833,18 +1150,67 @@ export default function App() {
   }
 
   if (!user) {
-    return <LandingPage onEnter={async (name, email, password, isRegistering) => {
+    return <LandingPage onEnter={async (name, email, password, isRegistering, phone, coupon) => {
       try {
         if (isRegistering) {
-          const { error } = await supabase.auth.signUp({
+          // Normaliza o telefone (apenas dígitos)
+          const phoneNormalized = (phone || '').replace(/\D/g, '');
+          if (!phoneNormalized || phoneNormalized.length < 10) {
+            throw new Error('Por favor, informe um número de telefone válido com DDD.');
+          }
+
+          // Verifica se o telefone já está cadastrado
+          const { data: existingPhone } = await supabase
+            .from('user_profiles')
+            .select('user_id')
+            .eq('phone_number', phoneNormalized)
+            .maybeSingle();
+
+          if (existingPhone) {
+            throw new Error('Este número de telefone já está cadastrado. Cada pessoa pode ter apenas uma conta. Se você já possui conta, entre com seu e-mail e senha.');
+          }
+
+          // Cria a conta no Supabase Auth
+          const { data: signUpData, error } = await supabase.auth.signUp({
             email,
             password,
             options: {
-              data: { full_name: name }
+              data: { full_name: name, phone: phoneNormalized }
             }
           });
           if (error) throw error;
-          alert('Cadastro realizado! Por favor, entre com suas credenciais.');
+
+          // Insere o perfil com telefone e datas de trial padrão (15 dias)
+          if (signUpData.user) {
+            const { error: profileError } = await supabase
+              .from('user_profiles')
+              .insert([{
+                user_id: signUpData.user.id,
+                phone_number: phoneNormalized,
+              }]);
+            if (profileError) {
+              console.error('Erro ao criar perfil:', profileError);
+            }
+
+            // Se cupom informado, aplica via função segura do banco
+            const couponTrimmed = (coupon || '').trim().toUpperCase();
+            if (couponTrimmed && signUpData.user) {
+              const { data: couponResult } = await supabase
+                .rpc('apply_coupon', {
+                  p_user_id: signUpData.user.id,
+                  p_code: couponTrimmed,
+                });
+
+              if (couponResult?.success) {
+                alert(`Cadastro realizado! 🎉\n\nCupom "${couponTrimmed}" aplicado com sucesso!\nSeu período de teste é de ${couponResult.total_days} dias. Bem-vinda!`);
+              } else {
+                // Cupom inválido — conta foi criada mas trial fica em 15 dias
+                alert(`Cadastro realizado com sucesso! Seu período de teste de 15 dias começou agora. Bem-vinda! 🎉\n\nAtenção: ${couponResult?.error || 'O cupom informado não é válido.'}`);
+              }
+            } else {
+              alert('Cadastro realizado com sucesso! Seu período de teste de 15 dias começou agora. Bem-vinda! 🎉');
+            }
+          }
         } else {
           const { error } = await supabase.auth.signInWithPassword({
             email,
@@ -856,6 +1222,18 @@ export default function App() {
         alert(err.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos' : err.message);
       }
     }} />;
+  }
+
+  // Bloqueia acesso se trial expirado e sem assinatura ativa
+  const hasActiveSubscription = subscription && subscription.status === 'active';
+  if (isTrialExpired && !hasActiveSubscription) {
+    return (
+      <TrialExpiredModal
+        userName={user?.user_metadata?.full_name || user?.email?.split('@')[0]}
+        onLogout={() => supabase.auth.signOut()}
+        onSubscriptionSuccess={() => fetchSubscription(user.id)}
+      />
+    );
   }
 
   return (
@@ -993,6 +1371,29 @@ export default function App() {
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Banner de Trial — exibe somente para usuários em período de teste */}
+      {isOnTrial && !hasActiveSubscription && (
+        <div
+          className={`text-center py-2.5 px-6 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-3 cursor-pointer transition-all hover:opacity-90`}
+          style={{
+            background: (trialDaysRemaining !== null && trialDaysRemaining <= 3)
+              ? 'linear-gradient(90deg, #C0392B, #E74C3C)'
+              : 'linear-gradient(90deg, #C9A84C, #E8C76B)',
+            color: 'white'
+          }}
+          onClick={() => setIsSubscriptionModalOpen(true)}
+        >
+          <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>
+            {trialDaysRemaining !== null && trialDaysRemaining <= 3
+              ? `⚠️ Apenas ${trialDaysRemaining} dia${trialDaysRemaining !== 1 ? 's' : ''} de teste restante${trialDaysRemaining !== 1 ? 's' : ''}! Assine agora`
+              : `✦ Período de teste: ${trialDaysRemaining} dia${trialDaysRemaining !== 1 ? 's' : ''} restante${trialDaysRemaining !== 1 ? 's' : ''} — Conheça os planos ✦`
+            }
+          </span>
+          <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
         </div>
       )}
 
@@ -1233,7 +1634,7 @@ export default function App() {
               )}
             </AnimatePresence>
             
-            <div className="pt-2">
+            <div className="pt-2 space-y-3">
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -1244,6 +1645,18 @@ export default function App() {
                 <Download className="w-5 h-5" />
                 GERAR PDF DETALHADO
               </motion.button>
+              
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={generateXLS}
+                disabled={isCustomRange && (!startDate || !endDate)}
+                className="w-full bg-white border-2 border-vinho text-vinho py-5 rounded-[24px] font-black text-sm flex items-center justify-center gap-3 shadow-md hover:bg-vinho hover:text-white transition-all uppercase tracking-[2px] disabled:opacity-50 disabled:scale-100"
+              >
+                <FileText className="w-5 h-5" />
+                GERAR PLANILHA EM XLS
+              </motion.button>
+              
               <p className="text-center text-[10px] text-cinza font-bold uppercase tracking-widest mt-4 opacity-40">
                 ✦ {isCustomRange ? 'Relatório por período personalizado' : 'Relatório consolidado do mês selecionado'} ✦
               </p>
@@ -1898,13 +2311,25 @@ function ResetPasswordPage({ onReset, onClose }: { onReset: (password: string) =
   );
 }
 
-function LandingPage({ onEnter }: { onEnter: (name: string, email: string, password?: string, isRegistering?: boolean) => void }) {
+function LandingPage({ onEnter }: { onEnter: (name: string, email: string, password?: string, isRegistering?: boolean, phone?: string, coupon?: string) => void }) {
   const [isRegistering, setIsRegistering] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [showCoupon, setShowCoupon] = useState(false);
+
+  // Formata o telefone conforme o usuário digita: (XX) XXXXX-XXXX
+  const formatPhone = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 2) return digits.length ? `(${digits}` : '';
+    if (digits.length <= 7) return `(${digits.slice(0,2)}) ${digits.slice(2)}`;
+    if (digits.length <= 11) return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
+    return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7,11)}`;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1913,7 +2338,7 @@ function LandingPage({ onEnter }: { onEnter: (name: string, email: string, passw
       return;
     }
     if ((isRegistering ? name : true) && email && password) {
-      onEnter(name, email, password, isRegistering);
+      onEnter(name, email, password, isRegistering, phone, couponCode);
     }
   };
 
@@ -1999,20 +2424,74 @@ function LandingPage({ onEnter }: { onEnter: (name: string, email: string, passw
               <AnimatePresence mode="wait">
                 {isRegistering && (
                   <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="text-left overflow-hidden"
+                    key="register-fields"
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-left space-y-4"
                   >
-                    <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">Nome Completo</label>
-                    <input 
-                      required={isRegistering}
-                      type="text" 
-                      className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                      placeholder="Como quer ser chamada?"
-                    />
+                    <div>
+                      <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">Nome Completo</label>
+                      <input 
+                        required={isRegistering}
+                        type="text" 
+                        className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        placeholder="Como quer ser chamada?"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-cinza uppercase tracking-widest mb-2 ml-1">Telefone (WhatsApp)</label>
+                      <input 
+                        required={isRegistering}
+                        type="tel" 
+                        className="w-full bg-fundo/30 border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho transition-all"
+                        value={phone}
+                        onChange={e => setPhone(formatPhone(e.target.value))}
+                        placeholder="(11) 99999-9999"
+                        maxLength={15}
+                      />
+                      <p className="text-[10px] text-cinza/60 mt-1.5 ml-1 font-medium">
+                        🔒 Usado para garantir uma conta por pessoa
+                      </p>
+                    </div>
+
+                    {/* Campo de Cupom */}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCoupon(!showCoupon)}
+                        className="text-[10px] font-black text-vinho/50 hover:text-vinho transition-colors uppercase tracking-widest flex items-center gap-1.5 ml-1"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        {showCoupon ? 'Remover cupom' : 'Tenho um cupom de desconto'}
+                      </button>
+                      <AnimatePresence>
+                        {showCoupon && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden mt-2"
+                          >
+                            <input
+                              type="text"
+                              className="w-full bg-fundo/30 border-2 border-dourado/40 rounded-2xl px-5 py-3.5 text-sm outline-none focus:border-dourado transition-all font-black tracking-widest text-vinho placeholder:text-cinza/30 uppercase"
+                              value={couponCode}
+                              onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                              placeholder="EX: BASTIDOR20"
+                              maxLength={20}
+                            />
+                            <p className="text-[10px] text-dourado/70 mt-1.5 ml-1 font-bold">
+                              ✦ Cupom válido estende seu período de teste
+                            </p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
