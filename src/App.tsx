@@ -742,21 +742,28 @@ export default function App() {
     doc.setFillColor(74, 55, 40); // Marrom Profundo
     doc.rect(0, 0, 210, 50, 'F');
     
-    // Draw Logo in PDF (Centered)
+       // Draw Falcon Logo in PDF (Centered)
     const logoSize = 22;
     const s = logoSize / 100;
     const logoY = 6;
-    
+    const cx = 105;
+    const cy = logoY;
+
     doc.setDrawColor(217, 197, 178); // Rosa/Bege color for logo lines
-    doc.setLineWidth(0.4);
-    doc.circle(105, logoY + 50 * s, 45 * s, 'S');
-    doc.setLineWidth(0.15);
-    doc.circle(105, logoY + 50 * s, 41 * s, 'S');
-    doc.setLineWidth(0.4);
-    doc.line(105 - 15 * s, logoY + 65 * s, 105 + 15 * s, logoY + 35 * s);
-    doc.setFillColor(217, 197, 178);
-    doc.circle(105 + 13 * s, logoY + 37 * s, 1 * s, 'F');
-    doc.roundedRect(105 - 8 * s, logoY + 2 * s, 16 * s, 6 * s, 1 * s, 1 * s, 'S');
+    doc.setLineWidth(0.5);
+
+    // M50 10 L85 30 L65 45 L80 70 L50 90 L20 70 L35 45 L15 30 Z
+    doc.line(cx, cy + 10*s, cx + 35*s, cy + 30*s);
+    doc.line(cx + 35*s, cy + 30*s, cx + 15*s, cy + 45*s);
+    doc.line(cx + 15*s, cy + 45*s, cx + 30*s, cy + 70*s);
+    doc.line(cx + 30*s, cy + 70*s, cx, cy + 90*s);
+    doc.line(cx, cy + 90*s, cx - 30*s, cy + 70*s);
+    doc.line(cx - 30*s, cy + 70*s, cx - 15*s, cy + 45*s);
+    doc.line(cx - 15*s, cy + 45*s, cx - 35*s, cy + 30*s);
+    doc.line(cx - 35*s, cy + 30*s, cx, cy + 10*s);
+    
+    doc.line(cx, cy + 10*s, cx, cy + 90*s);
+    doc.line(cx - 15*s, cy + 45*s, cx + 15*s, cy + 45*s);
 
     doc.setTextColor(255, 255, 255);
     doc.setFont('times', 'bold');
@@ -2253,19 +2260,9 @@ function DayDetailsModal({
 function HoopLogo({ className = "w-24 h-24" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="50" cy="50" r="41" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2 2" />
-      <line x1="35" y1="65" x2="65" y2="35" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="63" cy="37" r="1" fill="currentColor" />
-      <path 
-        d="M63 37 C 75 25, 85 45, 65 55 C 45 65, 35 45, 50 35" 
-        stroke="currentColor" 
-        strokeWidth="0.8" 
-        strokeLinecap="round" 
-        fill="none"
-        className="opacity-40"
-      />
-      <rect x="42" y="2" width="16" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M50 10 L85 30 L65 45 L80 70 L50 90 L20 70 L35 45 L15 30 Z" stroke="currentColor" strokeWidth="4" strokeLinejoin="round" />
+      <path d="M50 10 L50 90" stroke="currentColor" strokeWidth="2" />
+      <path d="M35 45 L65 45" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
 }
