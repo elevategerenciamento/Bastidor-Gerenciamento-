@@ -7,6 +7,19 @@ export interface Order {
   isPartnership: boolean;
   completed: boolean;
   payment: PaymentInfo;
+  selectedAdicionais?: Adicional[];
+  selectedProdutos?: Produto[];
+}
+
+export interface Adicional {
+  id: string;
+  name: string;
+  price: string;
+}
+
+export interface Produto {
+  id: string;
+  name: string;
 }
 
 export interface PaymentInfo {

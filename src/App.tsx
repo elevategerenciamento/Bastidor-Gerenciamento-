@@ -32,19 +32,25 @@ import {
   Search,
   Truck,
   HelpCircle,
-  ShieldCheck
+  ShieldCheck,
+  Tag,
+  Check,
+  PackageSearch,
+  ChevronDown
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import { INITIAL_ORDERS, TODAY } from './constants';
-import { Order, PaymentInfo, InventoryItem } from './types';
+import { Order, PaymentInfo, InventoryItem, Adicional, Produto } from './types';
 import { formatCurrency, getDaysRemaining, getStatusColor } from './lib/utils';
 import { supabase } from './lib/supabase';
 import SubscriptionModal from './components/SubscriptionModal';
 import TrialExpiredModal from './components/TrialExpiredModal';
 import SettingsModal from './components/SettingsModal';
 import SecurityPrivacyModal from './components/SecurityPrivacyModal';
+import AdicionaisModal from './components/AdicionaisModal';
+import ProdutosModal from './components/ProdutosModal';
 
 
 export default function App() {
@@ -53,6 +59,8 @@ export default function App() {
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [adicionais, setAdicionais] = useState<Adicional[]>([]);
+  const [produtos, setProdutos] = useState<Produto[]>([]);
   const [subscription, setSubscription] = useState<any>(null);
   const [trialInfo, setTrialInfo] = useState<any>(null);
   const [pdfDownloadCount, setPdfDownloadCount] = useState<number>(0);
@@ -166,6 +174,8 @@ export default function App() {
       if (session?.user) {
         fetchOrders();
         fetchInventory();
+        fetchAdicionais();
+        fetchProdutos();
         fetchSubscription(session.user.id);
         fetchTrialInfo(session.user.id);
         fetchPdfDownloadCount(session.user.id);
@@ -184,6 +194,8 @@ export default function App() {
       if (session?.user) {
         fetchOrders();
         fetchInventory();
+        fetchAdicionais();
+        fetchProdutos();
         fetchSubscription(session.user.id);
         fetchTrialInfo(session.user.id);
         fetchPdfDownloadCount(session.user.id);
@@ -231,7 +243,8 @@ export default function App() {
           deadline: o.deadline ? new Date(o.deadline) : null,
           isPartnership: o.is_partnership,
           completed: o.completed,
-          payment: o.payment
+          payment: o.payment,
+          selectedAdicionais: o.selected_adicionais || []
         })));
       }
     } catch (err) {
@@ -266,6 +279,45 @@ export default function App() {
     }
   };
 
+  const fetchAdicionais = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('adicionais')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      if (data) {
+        setAdicionais(data.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.price.toString(),
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching adicionais:', err);
+    }
+  };
+
+  const fetchProdutos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('produtos')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      if (data) {
+        setProdutos(data.map(item => ({
+          id: item.id,
+          name: item.name,
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching produtos:', err);
+    }
+  };
+
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'received' | 'pending' | 'urgent' | 'completed'>('all');
@@ -280,6 +332,8 @@ export default function App() {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [isAdicionaisOpen, setIsAdicionaisOpen] = useState(false);
+  const [isProdutosOpen, setIsProdutosOpen] = useState(false);
   const [isShippingOpen, setIsShippingOpen] = useState(false);
   const [isUrgencyInfoOpen, setIsUrgencyInfoOpen] = useState(false);
   const [isCustomRange, setIsCustomRange] = useState(false);
@@ -521,6 +575,7 @@ export default function App() {
         deadline: newOrder.deadline?.toISOString(),
         is_partnership: newOrder.isPartnership,
         payment: newOrder.payment,
+        selected_adicionais: newOrder.selectedAdicionais || [],
         user_id: user.id,
         completed: false
       }])
@@ -536,7 +591,8 @@ export default function App() {
         deadline: data.deadline ? new Date(data.deadline) : null,
         isPartnership: data.is_partnership,
         completed: data.completed,
-        payment: data.payment
+        payment: data.payment,
+        selectedAdicionais: data.selected_adicionais || []
       };
       setOrders(prev => [...prev, mapped]);
       setIsAddingOrder(false);
@@ -554,7 +610,8 @@ export default function App() {
         notes: updatedOrder.notes,
         deadline: updatedOrder.deadline?.toISOString(),
         is_partnership: updatedOrder.isPartnership,
-        payment: updatedOrder.payment
+        payment: updatedOrder.payment,
+        selected_adicionais: updatedOrder.selectedAdicionais || []
       })
       .eq('id', id);
       
@@ -678,6 +735,116 @@ export default function App() {
       } : item));
     } else {
       console.error('Error updating inventory item:', error);
+    }
+  };
+
+  const addAdicional = async (newItem: Omit<Adicional, 'id'>) => {
+    if (!user) return;
+    
+    const { data, error } = await supabase
+      .from('adicionais')
+      .insert([{
+        name: newItem.name,
+        price: parseFloat(newItem.price.replace(',', '.')) || 0,
+        user_id: user.id
+      }])
+      .select()
+      .single();
+      
+    if (!error && data) {
+      setAdicionais(prev => [{
+        id: data.id,
+        name: data.name,
+        price: data.price.toString()
+      }, ...prev].sort((a, b) => a.name.localeCompare(b.name)));
+    } else if (error) {
+      console.error('Error adding adicional:', error);
+    }
+  };
+
+  const updateAdicional = async (id: string, updatedItem: Omit<Adicional, 'id'>) => {
+    const { error } = await supabase
+      .from('adicionais')
+      .update({
+        name: updatedItem.name,
+        price: parseFloat(updatedItem.price.replace(',', '.')) || 0
+      })
+      .eq('id', id);
+      
+    if (!error) {
+      setAdicionais(prev => prev.map(item => item.id === id ? {
+        id,
+        name: updatedItem.name,
+        price: updatedItem.price
+      } : item).sort((a, b) => a.name.localeCompare(b.name)));
+    } else {
+      console.error('Error updating adicional:', error);
+    }
+  };
+
+  const deleteAdicional = async (id: string) => {
+    const { error } = await supabase
+      .from('adicionais')
+      .delete()
+      .eq('id', id);
+      
+    if (!error) {
+      setAdicionais(prev => prev.filter(item => item.id !== id));
+    } else {
+      console.error('Error deleting adicional:', error);
+    }
+  };
+
+  const addProduto = async (newItem: Omit<Produto, 'id'>) => {
+    if (!user) return;
+    
+    const { data, error } = await supabase
+      .from('produtos')
+      .insert([{
+        name: newItem.name,
+        user_id: user.id
+      }])
+      .select()
+      .single();
+      
+    if (!error && data) {
+      setProdutos(prev => [{
+        id: data.id,
+        name: data.name,
+      }, ...prev].sort((a, b) => a.name.localeCompare(b.name)));
+    } else if (error) {
+      console.error('Error adding produto:', error);
+    }
+  };
+
+  const updateProduto = async (id: string, updatedItem: Omit<Produto, 'id'>) => {
+    const { error } = await supabase
+      .from('produtos')
+      .update({
+        name: updatedItem.name,
+      })
+      .eq('id', id);
+      
+    if (!error) {
+      setProdutos(prev => prev.map(item => item.id === id ? {
+        id,
+        name: updatedItem.name,
+      } : item).sort((a, b) => a.name.localeCompare(b.name)));
+    } else {
+      console.error('Error updating produto:', error);
+    }
+  };
+
+  const deleteProduto = async (id: string) => {
+    const { error } = await supabase
+      .from('produtos')
+      .delete()
+      .eq('id', id);
+      
+    if (!error) {
+      setProdutos(prev => prev.filter(item => item.id !== id));
+    } else {
+      console.error('Error deleting produto:', error);
     }
   };
 
@@ -1299,6 +1466,26 @@ export default function App() {
                 >
                   <Package className="w-5 h-5" />
                   <span>Estoque & Compras</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setIsAdicionaisOpen(true);
+                    setIsSidebarOpen(false);
+                  }}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
+                >
+                  <Tag className="w-5 h-5" />
+                  <span>Adicionais (Extras)</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setIsProdutosOpen(true);
+                    setIsSidebarOpen(false);
+                  }}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
+                >
+                  <PackageSearch className="w-5 h-5" />
+                  <span>Meus Produtos</span>
                 </button>
                 <button 
                   onClick={() => {
@@ -1924,12 +2111,16 @@ export default function App() {
       <AnimatePresence>
         {isAddingOrder && (
           <AddOrderModal 
+            produtos={produtos}
+            adicionais={adicionais}
             onClose={() => setIsAddingOrder(false)} 
             onAdd={addNewOrder} 
           />
         )}
         {editingOrder && (
           <AddOrderModal 
+            produtos={produtos}
+            adicionais={adicionais}
             orderToEdit={editingOrder}
             onClose={() => setEditingOrder(null)} 
             onAdd={(updated) => updateOrder(editingOrder.id, updated)} 
@@ -1969,6 +2160,24 @@ export default function App() {
           <DeleteConfirmationModal 
             onClose={() => setDeletingOrderId(null)}
             onConfirm={confirmDelete}
+          />
+        )}
+        {isAdicionaisOpen && (
+          <AdicionaisModal 
+            adicionais={adicionais}
+            onClose={() => setIsAdicionaisOpen(false)}
+            onAdd={addAdicional}
+            onUpdate={updateAdicional}
+            onDelete={deleteAdicional}
+          />
+        )}
+        {isProdutosOpen && (
+          <ProdutosModal 
+            produtos={produtos}
+            onClose={() => setIsProdutosOpen(false)}
+            onAdd={addProduto}
+            onUpdate={updateProduto}
+            onDelete={deleteProduto}
           />
         )}
         {isInventoryOpen && (
@@ -2639,16 +2848,22 @@ const ESTADOS_BR = [
 ];
 
 function AddOrderModal({ 
+  produtos,
+  adicionais,
   onClose, 
   onAdd, 
   orderToEdit 
 }: { 
+  produtos: Produto[];
+  adicionais: Adicional[];
   onClose: () => void; 
   onAdd: (order: Omit<Order, 'id' | 'completed'>) => void;
   orderToEdit?: Order | null;
 }) {
   const [name, setName] = useState(orderToEdit?.customerName || '');
-  const [piece, setPiece] = useState(orderToEdit?.pieceDescription || '');
+  const [selectedProdutos, setSelectedProdutos] = useState<Produto[]>(orderToEdit?.selectedProdutos || []);
+  const [isProdutosDropdownOpen, setIsProdutosDropdownOpen] = useState(false);
+  const [selectedAdicionais, setSelectedAdicionais] = useState<Adicional[]>(orderToEdit?.selectedAdicionais || []);
   const [notes, setNotes] = useState(orderToEdit?.notes || '');
   const [date, setDate] = useState(orderToEdit?.deadline ? orderToEdit.deadline.toISOString().split('T')[0] : '');
   const [isPartnership, setIsPartnership] = useState(orderToEdit?.isPartnership || false);
@@ -2656,6 +2871,15 @@ function AddOrderModal({
   const [entryAmount, setEntryAmount] = useState(orderToEdit?.payment.pixEntryAmount || '');
   const [shippingValue, setShippingValue] = useState(orderToEdit?.payment.shippingValue || '');
   const [shippingState, setShippingState] = useState(orderToEdit?.payment.shippingState || '');
+
+  const handleToggleProduto = (prod: Produto) => {
+    const isSelected = selectedProdutos.some(p => p.id === prod.id);
+    if (isSelected) {
+      setSelectedProdutos(prev => prev.filter(p => p.id !== prod.id));
+    } else {
+      setSelectedProdutos(prev => [...prev, prod]);
+    }
+  };
 
   const entryPercentage = useMemo(() => {
     const total = parseFloat(value.replace(',', '.')) || 0;
@@ -2668,11 +2892,14 @@ function AddOrderModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !piece) return;
+    if (!name || selectedProdutos.length === 0) {
+      alert("Por favor, selecione pelo menos um produto.");
+      return;
+    }
 
     onAdd({
       customerName: name,
-      pieceDescription: piece,
+      pieceDescription: selectedProdutos.map(p => p.name).join(', '),
       notes,
       deadline: date ? new Date(date + 'T12:00:00') : null,
       isPartnership,
@@ -2686,8 +2913,26 @@ function AddOrderModal({
         cardPaid: false,
         shippingValue,
         shippingState
-      }
+      },
+      selectedAdicionais,
+      selectedProdutos
     });
+  };
+
+  const handleToggleAdicional = (adc: Adicional) => {
+    const isSelected = selectedAdicionais.some(a => a.id === adc.id);
+    let currentValNum = parseFloat(value.replace(',', '.')) || 0;
+    const adcPrice = parseFloat(adc.price.replace(',', '.')) || 0;
+
+    if (isSelected) {
+      setSelectedAdicionais(prev => prev.filter(a => a.id !== adc.id));
+      currentValNum -= adcPrice;
+    } else {
+      setSelectedAdicionais(prev => [...prev, adc]);
+      currentValNum += adcPrice;
+    }
+
+    setValue(currentValNum > 0 ? formatCurrency(currentValNum).replace('R$', '').trim() : '');
   };
 
   return (
@@ -2740,22 +2985,104 @@ function AddOrderModal({
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 relative">
               <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">O que vamos bordar?</label>
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
-                  <Sparkles className="w-4 h-4" />
+              
+              {produtos.length > 0 ? (
+                <div className="relative">
+                  <div 
+                    onClick={() => setIsProdutosDropdownOpen(!isProdutosDropdownOpen)}
+                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-10 py-4 text-sm outline-none focus:border-vinho transition-all text-vinho font-medium shadow-sm cursor-pointer min-h-[56px] flex items-center"
+                  >
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    {selectedProdutos.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedProdutos.map(p => (
+                          <span key={p.id} className="bg-rosa/10 text-vinho px-2 py-1 rounded-lg text-xs font-bold border border-rosa/20 flex items-center gap-1">
+                            {p.name}
+                            <X className="w-3 h-3 cursor-pointer hover:text-vermelho" onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleProduto(p);
+                            }} />
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-cinza/50">Selecione os produtos...</span>
+                    )}
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-rosa">
+                      <ChevronDown className={`w-4 h-4 transition-transform ${isProdutosDropdownOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {isProdutosDropdownOpen && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-rosa/30 rounded-2xl shadow-xl overflow-hidden z-20 max-h-48 overflow-y-auto"
+                      >
+                        {produtos.map(prod => {
+                          const isSelected = selectedProdutos.some(p => p.id === prod.id);
+                          return (
+                            <div 
+                              key={prod.id}
+                              onClick={() => handleToggleProduto(prod)}
+                              className={`px-4 py-3 cursor-pointer transition-colors flex items-center justify-between ${
+                                isSelected ? 'bg-vinho/5 text-vinho font-bold' : 'hover:bg-rosa/5 text-cinza'
+                              }`}
+                            >
+                              <span>{prod.name}</span>
+                              {isSelected && <Check className="w-4 h-4 text-vinho" />}
+                            </div>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-                <input 
-                  required
-                  type="text" 
-                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium placeholder:text-cinza/30 shadow-sm"
-                  value={piece}
-                  onChange={e => setPiece(e.target.value)}
-                  placeholder="Ex: Quadro Maternidade Ramos..."
-                />
-              </div>
+              ) : (
+                <div className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm text-cinza/50 shadow-sm flex items-center relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa/50">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  Nenhum produto cadastrado.
+                </div>
+              )}
             </div>
+
+            {adicionais.length > 0 && (
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Adicionais</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {adicionais.map(adc => {
+                    const isSelected = selectedAdicionais.some(a => a.id === adc.id);
+                    return (
+                      <div 
+                        key={adc.id}
+                        onClick={() => handleToggleAdicional(adc)}
+                        className={`flex items-center gap-3 p-3 rounded-2xl border-2 cursor-pointer transition-all ${
+                          isSelected ? 'border-vinho bg-vinho/5' : 'border-rosa/30 bg-white hover:border-rosa'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-all shrink-0 ${
+                          isSelected ? 'bg-vinho border-vinho text-white' : 'border-rosa/50 bg-white'
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 font-bold" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-vinho truncate">{adc.name}</p>
+                          <p className="text-[10px] font-bold text-cinza">R$ {adc.price}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Alguma observação importante?</label>
