@@ -9,12 +9,14 @@ export interface Order {
   payment: PaymentInfo;
   selectedAdicionais?: Adicional[];
   selectedProdutos?: Produto[];
+  usedStockItems?: { stockItemId: string; quantity: number }[];
 }
 
 export interface Adicional {
   id: string;
   name: string;
   price: string;
+  stockQuantity?: number;
 }
 
 export interface Produto {
@@ -45,4 +47,11 @@ export interface InventoryItem {
   purchaseDate: Date;
   paymentMethod: 'cash' | 'pix' | 'card';
   installments?: number;
+}
+
+export interface StockItem {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
 }

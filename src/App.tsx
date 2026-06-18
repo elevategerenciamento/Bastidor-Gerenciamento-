@@ -34,7 +34,6 @@ import {
   HelpCircle,
   ShieldCheck,
   Tag,
-  Check,
   PackageSearch,
   ChevronDown
 } from 'lucide-react';
@@ -42,7 +41,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import { INITIAL_ORDERS, TODAY } from './constants';
-import { Order, PaymentInfo, InventoryItem, Adicional, Produto } from './types';
+import { Order, PaymentInfo, InventoryItem, Adicional, Produto, StockItem } from './types';
 import { formatCurrency, getDaysRemaining, getStatusColor } from './lib/utils';
 import { supabase } from './lib/supabase';
 import SubscriptionModal from './components/SubscriptionModal';
@@ -51,6 +50,7 @@ import SettingsModal from './components/SettingsModal';
 import SecurityPrivacyModal from './components/SecurityPrivacyModal';
 import AdicionaisModal from './components/AdicionaisModal';
 import ProdutosModal from './components/ProdutosModal';
+import StockModal from './components/StockModal';
 
 
 export default function App() {
@@ -61,6 +61,7 @@ export default function App() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [adicionais, setAdicionais] = useState<Adicional[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [subscription, setSubscription] = useState<any>(null);
   const [trialInfo, setTrialInfo] = useState<any>(null);
   const [pdfDownloadCount, setPdfDownloadCount] = useState<number>(0);
@@ -176,6 +177,7 @@ export default function App() {
         fetchInventory();
         fetchAdicionais();
         fetchProdutos();
+        fetchStockItems();
         fetchSubscription(session.user.id);
         fetchTrialInfo(session.user.id);
         fetchPdfDownloadCount(session.user.id);
@@ -196,6 +198,7 @@ export default function App() {
         fetchInventory();
         fetchAdicionais();
         fetchProdutos();
+        fetchStockItems();
         fetchSubscription(session.user.id);
         fetchTrialInfo(session.user.id);
         fetchPdfDownloadCount(session.user.id);
@@ -244,7 +247,8 @@ export default function App() {
           isPartnership: o.is_partnership,
           completed: o.completed,
           payment: o.payment,
-          selectedAdicionais: o.selected_adicionais || []
+          selectedAdicionais: o.selected_adicionais || [],
+          usedStockItems: o.used_stock_items || []
         })));
       }
     } catch (err) {
@@ -318,6 +322,27 @@ export default function App() {
     }
   };
 
+  const fetchStockItems = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('stock_items')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      if (data) {
+        setStockItems(data.map(item => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity,
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching stock items:', err);
+    }
+  };
+
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'received' | 'pending' | 'urgent' | 'completed'>('all');
@@ -332,6 +357,7 @@ export default function App() {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [isAdicionaisOpen, setIsAdicionaisOpen] = useState(false);
   const [isProdutosOpen, setIsProdutosOpen] = useState(false);
   const [isShippingOpen, setIsShippingOpen] = useState(false);
@@ -576,6 +602,7 @@ export default function App() {
         is_partnership: newOrder.isPartnership,
         payment: newOrder.payment,
         selected_adicionais: newOrder.selectedAdicionais || [],
+        used_stock_items: newOrder.usedStockItems || [],
         user_id: user.id,
         completed: false
       }])
@@ -583,6 +610,18 @@ export default function App() {
       .single();
       
     if (!error && data) {
+      // Deduz do estoque localmente e no banco
+      if (newOrder.usedStockItems && newOrder.usedStockItems.length > 0) {
+        newOrder.usedStockItems.forEach(async (usedItem) => {
+          const item = stockItems.find(s => s.id === usedItem.stockItemId);
+          if (item) {
+            const newQuantity = Math.max(0, item.quantity - usedItem.quantity);
+            await supabase.from('stock_items').update({ quantity: newQuantity }).eq('id', item.id);
+            setStockItems(prev => prev.map(s => s.id === item.id ? { ...s, quantity: newQuantity } : s));
+          }
+        });
+      }
+
       const mapped: Order = {
         id: data.id,
         customerName: data.customer_name,
@@ -592,7 +631,8 @@ export default function App() {
         isPartnership: data.is_partnership,
         completed: data.completed,
         payment: data.payment,
-        selectedAdicionais: data.selected_adicionais || []
+        selectedAdicionais: data.selected_adicionais || [],
+        usedStockItems: data.used_stock_items || []
       };
       setOrders(prev => [...prev, mapped]);
       setIsAddingOrder(false);
@@ -611,11 +651,39 @@ export default function App() {
         deadline: updatedOrder.deadline?.toISOString(),
         is_partnership: updatedOrder.isPartnership,
         payment: updatedOrder.payment,
-        selected_adicionais: updatedOrder.selectedAdicionais || []
+        selected_adicionais: updatedOrder.selectedAdicionais || [],
+        used_stock_items: updatedOrder.usedStockItems || []
       })
       .eq('id', id);
       
     if (!error) {
+      // Ajusta o estoque verificando a diferença
+      const oldOrder = orders.find(o => o.id === id);
+      const oldStock = oldOrder?.usedStockItems || [];
+      const newStock = updatedOrder.usedStockItems || [];
+
+      const stockDiffs: Record<string, number> = {};
+      
+      // Devolve o que foi usado antes
+      oldStock.forEach(item => {
+        stockDiffs[item.stockItemId] = (stockDiffs[item.stockItemId] || 0) + item.quantity;
+      });
+      // Retira o que está sendo usado agora
+      newStock.forEach(item => {
+        stockDiffs[item.stockItemId] = (stockDiffs[item.stockItemId] || 0) - item.quantity;
+      });
+
+      Object.entries(stockDiffs).forEach(async ([stockItemId, diff]) => {
+        if (diff !== 0) {
+          const item = stockItems.find(s => s.id === stockItemId);
+          if (item) {
+            const newQuantity = Math.max(0, item.quantity + diff);
+            await supabase.from('stock_items').update({ quantity: newQuantity }).eq('id', stockItemId);
+            setStockItems(prev => prev.map(s => s.id === stockItemId ? { ...s, quantity: newQuantity } : s));
+          }
+        }
+      });
+
       setOrders(prev => prev.map(o => o.id === id ? { ...updatedOrder, id, completed: o.completed } : o));
       setEditingOrder(null);
     } else {
@@ -629,12 +697,26 @@ export default function App() {
 
   const confirmDelete = async () => {
     if (deletingOrderId) {
+      const orderToDelete = orders.find(o => o.id === deletingOrderId);
+      
       const { error } = await supabase
         .from('orders')
         .delete()
         .eq('id', deletingOrderId);
         
       if (!error) {
+        // Devolve os itens ao estoque
+        if (orderToDelete?.usedStockItems && orderToDelete.usedStockItems.length > 0) {
+          orderToDelete.usedStockItems.forEach(async (usedItem) => {
+            const item = stockItems.find(s => s.id === usedItem.stockItemId);
+            if (item) {
+              const newQuantity = item.quantity + usedItem.quantity;
+              await supabase.from('stock_items').update({ quantity: newQuantity }).eq('id', item.id);
+              setStockItems(prev => prev.map(s => s.id === item.id ? { ...s, quantity: newQuantity } : s));
+            }
+          });
+        }
+
         setOrders(prev => prev.filter(o => o.id !== deletingOrderId));
         setDeletingOrderId(null);
       } else {
@@ -845,6 +927,67 @@ export default function App() {
       setProdutos(prev => prev.filter(item => item.id !== id));
     } else {
       console.error('Error deleting produto:', error);
+    }
+  };
+
+  const addStockItem = async (newItem: Omit<StockItem, 'id'>) => {
+    if (!user) return;
+    
+    const { data, error } = await supabase
+      .from('stock_items')
+      .insert([{
+        name: newItem.name,
+        category: newItem.category,
+        quantity: newItem.quantity,
+        user_id: user.id
+      }])
+      .select()
+      .single();
+      
+    if (!error && data) {
+      setStockItems(prev => [{
+        id: data.id,
+        name: data.name,
+        category: data.category,
+        quantity: data.quantity,
+      }, ...prev].sort((a, b) => a.name.localeCompare(b.name)));
+    } else if (error) {
+      console.error('Error adding stock item:', error);
+    }
+  };
+
+  const updateStockItem = async (id: string, updatedItem: Omit<StockItem, 'id'>) => {
+    const { error } = await supabase
+      .from('stock_items')
+      .update({
+        name: updatedItem.name,
+        category: updatedItem.category,
+        quantity: updatedItem.quantity,
+      })
+      .eq('id', id);
+      
+    if (!error) {
+      setStockItems(prev => prev.map(item => item.id === id ? {
+        id,
+        name: updatedItem.name,
+        category: updatedItem.category,
+        quantity: updatedItem.quantity,
+      } : item).sort((a, b) => a.name.localeCompare(b.name)));
+    } else {
+      console.error('Error updating stock item:', error);
+    }
+  };
+
+  const deleteStockItem = async (id: string) => {
+    const { error } = await supabase
+      .from('stock_items')
+      .delete()
+      .eq('id', id);
+      
+    if (!error) {
+      setStockItems(prev => prev.filter(item => item.id !== id));
+    } else {
+      console.error('Error deleting stock item:', error);
     }
   };
 
@@ -1454,7 +1597,24 @@ export default function App() {
                   onClick={() => {
                     const isFree = !subscription || subscription.status !== 'active';
                     if (isFree) {
-                      alert("O controle de estoque é exclusivo para assinantes! Escolha um plano para ativar.");
+                      alert("O controle de estoque físico é exclusivo para assinantes! Escolha um plano para ativar.");
+                      setIsSidebarOpen(false);
+                      setIsSubscriptionModalOpen(true);
+                    } else {
+                      setIsStockModalOpen(true);
+                      setIsSidebarOpen(false);
+                    }
+                  }}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
+                >
+                  <Package className="w-5 h-5" />
+                  <span>Estoque Físico</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    const isFree = !subscription || subscription.status !== 'active';
+                    if (isFree) {
+                      alert("O controle de compras é exclusivo para assinantes! Escolha um plano para ativar.");
                       setIsSidebarOpen(false);
                       setIsSubscriptionModalOpen(true);
                     } else {
@@ -1464,8 +1624,8 @@ export default function App() {
                   }}
                   className="w-full flex items-center gap-4 p-4 rounded-2xl text-vinho hover:bg-rosa/10 transition-all font-bold"
                 >
-                  <Package className="w-5 h-5" />
-                  <span>Estoque & Compras</span>
+                  <TrendingUp className="w-5 h-5" />
+                  <span>Compras & Gastos</span>
                 </button>
                 <button 
                   onClick={() => {
@@ -2113,6 +2273,7 @@ export default function App() {
           <AddOrderModal 
             produtos={produtos}
             adicionais={adicionais}
+            stockItems={stockItems}
             onClose={() => setIsAddingOrder(false)} 
             onAdd={addNewOrder} 
           />
@@ -2121,6 +2282,7 @@ export default function App() {
           <AddOrderModal 
             produtos={produtos}
             adicionais={adicionais}
+            stockItems={stockItems}
             orderToEdit={editingOrder}
             onClose={() => setEditingOrder(null)} 
             onAdd={(updated) => updateOrder(editingOrder.id, updated)} 
@@ -2169,6 +2331,15 @@ export default function App() {
             onAdd={addAdicional}
             onUpdate={updateAdicional}
             onDelete={deleteAdicional}
+          />
+        )}
+        {isStockModalOpen && (
+          <StockModal 
+            stockItems={stockItems}
+            onClose={() => setIsStockModalOpen(false)}
+            onAdd={addStockItem}
+            onUpdate={updateStockItem}
+            onDelete={deleteStockItem}
           />
         )}
         {isProdutosOpen && (
@@ -2850,12 +3021,14 @@ const ESTADOS_BR = [
 function AddOrderModal({ 
   produtos,
   adicionais,
+  stockItems,
   onClose, 
   onAdd, 
   orderToEdit 
 }: { 
   produtos: Produto[];
   adicionais: Adicional[];
+  stockItems: StockItem[];
   onClose: () => void; 
   onAdd: (order: Omit<Order, 'id' | 'completed'>) => void;
   orderToEdit?: Order | null;
@@ -2864,6 +3037,8 @@ function AddOrderModal({
   const [selectedProdutos, setSelectedProdutos] = useState<Produto[]>(orderToEdit?.selectedProdutos || []);
   const [isProdutosDropdownOpen, setIsProdutosDropdownOpen] = useState(false);
   const [selectedAdicionais, setSelectedAdicionais] = useState<Adicional[]>(orderToEdit?.selectedAdicionais || []);
+  const [usedStockItems, setUsedStockItems] = useState<{ stockItemId: string; quantity: number }[]>(orderToEdit?.usedStockItems || []);
+  const [isStockDropdownOpen, setIsStockDropdownOpen] = useState(false);
   const [notes, setNotes] = useState(orderToEdit?.notes || '');
   const [date, setDate] = useState(orderToEdit?.deadline ? orderToEdit.deadline.toISOString().split('T')[0] : '');
   const [isPartnership, setIsPartnership] = useState(orderToEdit?.isPartnership || false);
@@ -2879,6 +3054,25 @@ function AddOrderModal({
     } else {
       setSelectedProdutos(prev => [...prev, prod]);
     }
+  };
+
+  const handleToggleStockItem = (item: StockItem) => {
+    const existing = usedStockItems.find(s => s.stockItemId === item.id);
+    if (existing) {
+      setUsedStockItems(prev => prev.filter(s => s.stockItemId !== item.id));
+    } else {
+      setUsedStockItems(prev => [...prev, { stockItemId: item.id, quantity: 1 }]);
+    }
+  };
+
+  const updateStockItemQuantity = (id: string, delta: number) => {
+    setUsedStockItems(prev => prev.map(s => {
+      if (s.stockItemId === id) {
+        const newQ = Math.max(1, s.quantity + delta);
+        return { ...s, quantity: newQ };
+      }
+      return s;
+    }));
   };
 
   const entryPercentage = useMemo(() => {
@@ -2915,7 +3109,8 @@ function AddOrderModal({
         shippingState
       },
       selectedAdicionais,
-      selectedProdutos
+      selectedProdutos,
+      usedStockItems
     });
   };
 
@@ -3053,6 +3248,83 @@ function AddOrderModal({
                 </div>
               )}
             </div>
+
+            {stockItems.length > 0 && (
+              <div className="space-y-1.5 relative z-10">
+                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Materiais do Estoque Utilizados</label>
+                <div className="relative">
+                  <div 
+                    onClick={() => setIsStockDropdownOpen(!isStockDropdownOpen)}
+                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-10 py-4 text-sm outline-none focus:border-vinho transition-all text-vinho font-medium shadow-sm cursor-pointer min-h-[56px] flex items-center"
+                  >
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa">
+                      <Package className="w-4 h-4" />
+                    </div>
+                    {usedStockItems.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 w-full pr-2">
+                        {usedStockItems.map(s => {
+                          const item = stockItems.find(i => i.id === s.stockItemId);
+                          if (!item) return null;
+                          return (
+                            <div key={s.stockItemId} className="bg-creme text-vinho px-2 py-1 rounded-lg text-xs font-bold border border-rosa/20 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                              <span className="truncate max-w-[100px]">{item.name}</span>
+                              <div className="flex items-center gap-1 bg-white rounded border border-rosa/20 px-1">
+                                <button type="button" onClick={() => updateStockItemQuantity(s.stockItemId, -1)} className="hover:text-vermelho">-</button>
+                                <span className="text-[10px] w-4 text-center">{s.quantity}</span>
+                                <button type="button" onClick={() => updateStockItemQuantity(s.stockItemId, 1)} className="hover:text-verde">+</button>
+                              </div>
+                              <X className="w-3 h-3 cursor-pointer hover:text-vermelho ml-1" onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleStockItem(item);
+                              }} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-cinza/50">Selecione bastidores, caixas, etc...</span>
+                    )}
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-rosa pointer-events-none">
+                      <ChevronDown className={`w-4 h-4 transition-transform ${isStockDropdownOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {isStockDropdownOpen && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-rosa/30 rounded-2xl shadow-xl overflow-hidden z-20 max-h-48 overflow-y-auto"
+                      >
+                        {stockItems.map(item => {
+                          const isSelected = usedStockItems.some(s => s.stockItemId === item.id);
+                          return (
+                            <div 
+                              key={item.id}
+                              onClick={() => handleToggleStockItem(item)}
+                              className={`px-4 py-3 cursor-pointer transition-colors flex items-center justify-between ${
+                                isSelected ? 'bg-vinho/5 text-vinho font-bold' : 'hover:bg-rosa/5 text-cinza'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span>{item.name}</span>
+                                <span className="text-[10px] bg-creme px-1.5 py-0.5 rounded text-cinza">{item.category}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-cinza">{item.quantity} disp.</span>
+                                {isSelected && <Check className="w-4 h-4 text-vinho" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            )}
+
 
             {adicionais.length > 0 && (
               <div className="space-y-2">

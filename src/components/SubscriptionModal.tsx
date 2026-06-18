@@ -238,13 +238,13 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
 
                     <div className="py-1 md:py-2">
                       <span className="text-3xl md:text-4xl font-serif font-black text-vinho">
-                        {billingPeriod === 'monthly' ? 'R$ 19,90' : 'R$ 199,00'}
+                        {billingPeriod === 'monthly' ? 'R$ 24,90' : 'R$ 244,90'}
                       </span>
                       <span className="text-xs text-cinza font-bold">
                         {billingPeriod === 'monthly' ? ' / mês' : ' / ano'}
                       </span>
                       {billingPeriod === 'yearly' && (
-                        <div className="text-[10px] text-dourado font-bold mt-1">Equivalente a R$ 16,58/mês</div>
+                        <div className="text-[10px] text-dourado font-bold mt-1">Equivalente a R$ 20,40/mês</div>
                       )}
                     </div>
 
@@ -309,13 +309,13 @@ export default function SubscriptionModal({ onClose, currentPlan, subscriptionSt
 
                     <div className="py-1 md:py-2">
                       <span className="text-3xl md:text-4xl font-serif font-black text-creme">
-                        {billingPeriod === 'monthly' ? 'R$ 34,90' : 'R$ 349,00'}
+                        {billingPeriod === 'monthly' ? 'R$ 44,90' : 'R$ 444,90'}
                       </span>
                       <span className="text-xs text-rosa/60 font-bold">
                         {billingPeriod === 'monthly' ? ' / mês' : ' / ano'}
                       </span>
                       {billingPeriod === 'yearly' && (
-                        <div className="text-[10px] text-dourado font-bold mt-1">Equivalente a R$ 29,08/mês</div>
+                        <div className="text-[10px] text-dourado font-bold mt-1">Equivalente a R$ 37,07/mês</div>
                       )}
                     </div>
 
