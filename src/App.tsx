@@ -3142,7 +3142,7 @@ function AddOrderModal({
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className="bg-creme max-w-lg w-full rounded-[40px] shadow-2xl border-2 border-rosa overflow-hidden"
+        className="bg-creme max-w-lg md:max-w-4xl w-full rounded-[40px] shadow-2xl border-2 border-rosa overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header decorativo */}
@@ -3161,329 +3161,337 @@ function AddOrderModal({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Quem é a cliente?</label>
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
-                  <Menu className="w-4 h-4" />
+        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6">
+          {/* Layout Responsivo: 1 coluna no mobile, 2 colunas lado a lado no Desktop */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Coluna da Esquerda */}
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Quem é a cliente?</label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+                    <Menu className="w-4 h-4" />
+                  </div>
+                  <input 
+                    required
+                    type="text" 
+                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium placeholder:text-cinza/30 shadow-sm"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Nome completo da cliente..."
+                  />
                 </div>
-                <input 
-                  required
-                  type="text" 
-                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium placeholder:text-cinza/30 shadow-sm"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Nome completo da cliente..."
-                />
               </div>
-            </div>
 
-            <div className="space-y-1.5 relative">
-              <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">O que vamos bordar?</label>
-              
-              {produtos.length > 0 ? (
-                <div className="relative">
-                  <div 
-                    onClick={() => setIsProdutosDropdownOpen(!isProdutosDropdownOpen)}
-                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-10 py-4 text-sm outline-none focus:border-vinho transition-all text-vinho font-medium shadow-sm cursor-pointer min-h-[56px] flex items-center"
-                  >
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa">
-                      <Sparkles className="w-4 h-4" />
-                    </div>
-                    {selectedProdutos.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedProdutos.map(p => (
-                          <span key={p.id} className="bg-rosa/10 text-vinho px-2 py-1 rounded-lg text-xs font-bold border border-rosa/20 flex items-center gap-1">
-                            {p.name}
-                            <X className="w-3 h-3 cursor-pointer hover:text-vermelho" onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleProduto(p);
-                            }} />
-                          </span>
-                        ))}
+              <div className="space-y-1.5 relative">
+                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">O que vamos bordar?</label>
+                
+                {produtos.length > 0 ? (
+                  <div className="relative">
+                    <div 
+                      onClick={() => setIsProdutosDropdownOpen(!isProdutosDropdownOpen)}
+                      className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-10 py-4 text-sm outline-none focus:border-vinho transition-all text-vinho font-medium shadow-sm cursor-pointer min-h-[56px] flex items-center"
+                    >
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa">
+                        <Sparkles className="w-4 h-4" />
                       </div>
-                    ) : (
-                      <span className="text-cinza/50">Selecione os produtos...</span>
-                    )}
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-rosa">
-                      <ChevronDown className={`w-4 h-4 transition-transform ${isProdutosDropdownOpen ? 'rotate-180' : ''}`} />
-                    </div>
-                  </div>
-
-                  <AnimatePresence>
-                    {isProdutosDropdownOpen && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-rosa/30 rounded-2xl shadow-xl overflow-hidden z-20 max-h-48 overflow-y-auto"
-                      >
-                        {produtos.map(prod => {
-                          const isSelected = selectedProdutos.some(p => p.id === prod.id);
-                          return (
-                            <div 
-                              key={prod.id}
-                              onClick={() => handleToggleProduto(prod)}
-                              className={`px-4 py-3 cursor-pointer transition-colors flex items-center justify-between ${
-                                isSelected ? 'bg-vinho/5 text-vinho font-bold' : 'hover:bg-rosa/5 text-cinza'
-                              }`}
-                            >
-                              <span>{prod.name}</span>
-                              {isSelected && <Check className="w-4 h-4 text-vinho" />}
-                            </div>
-                          );
-                        })}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <div className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm text-cinza/50 shadow-sm flex items-center relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa/50">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  Nenhum produto cadastrado.
-                </div>
-              )}
-            </div>
-
-            {stockItems.length > 0 && (
-              <div className="space-y-1.5 relative z-10">
-                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Materiais do Estoque Utilizados</label>
-                <div className="relative">
-                  <div 
-                    onClick={() => setIsStockDropdownOpen(!isStockDropdownOpen)}
-                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-10 py-4 text-sm outline-none focus:border-vinho transition-all text-vinho font-medium shadow-sm cursor-pointer min-h-[56px] flex items-center"
-                  >
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa">
-                      <Package className="w-4 h-4" />
-                    </div>
-                    {usedStockItems.length > 0 ? (
-                      <div className="flex flex-wrap gap-2 w-full pr-2">
-                        {usedStockItems.map(s => {
-                          const item = stockItems.find(i => i.id === s.stockItemId);
-                          if (!item) return null;
-                          return (
-                            <div key={s.stockItemId} className="bg-creme text-vinho px-2 py-1 rounded-lg text-xs font-bold border border-rosa/20 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                              <span className="truncate max-w-[100px]">{item.name}</span>
-                              <div className="flex items-center gap-1 bg-white rounded border border-rosa/20 px-1">
-                                <button type="button" onClick={() => updateStockItemQuantity(s.stockItemId, -1)} className="hover:text-vermelho">-</button>
-                                <span className="text-[10px] w-4 text-center">{s.quantity}</span>
-                                <button type="button" onClick={() => updateStockItemQuantity(s.stockItemId, 1)} className="hover:text-verde">+</button>
-                              </div>
-                              <X className="w-3 h-3 cursor-pointer hover:text-vermelho ml-1" onClick={(e) => {
+                      {selectedProdutos.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedProdutos.map(p => (
+                            <span key={p.id} className="bg-rosa/10 text-vinho px-2 py-1 rounded-lg text-xs font-bold border border-rosa/20 flex items-center gap-1">
+                              {p.name}
+                              <X className="w-3 h-3 cursor-pointer hover:text-vermelho" onClick={(e) => {
                                 e.stopPropagation();
-                                handleToggleStockItem(item);
+                                handleToggleProduto(p);
                               }} />
-                            </div>
-                          );
-                        })}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-cinza/50">Selecione os produtos...</span>
+                      )}
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 text-rosa">
+                        <ChevronDown className={`w-4 h-4 transition-transform ${isProdutosDropdownOpen ? 'rotate-180' : ''}`} />
                       </div>
-                    ) : (
-                      <span className="text-cinza/50">Selecione bastidores, caixas, etc...</span>
-                    )}
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-rosa pointer-events-none">
-                      <ChevronDown className={`w-4 h-4 transition-transform ${isStockDropdownOpen ? 'rotate-180' : ''}`} />
                     </div>
-                  </div>
 
-                  <AnimatePresence>
-                    {isStockDropdownOpen && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-rosa/30 rounded-2xl shadow-xl overflow-hidden z-20 max-h-48 overflow-y-auto"
-                      >
-                        {stockItems.map(item => {
-                          const isSelected = usedStockItems.some(s => s.stockItemId === item.id);
-                          return (
-                            <div 
-                              key={item.id}
-                              onClick={() => handleToggleStockItem(item)}
-                              className={`px-4 py-3 cursor-pointer transition-colors flex items-center justify-between ${
-                                isSelected ? 'bg-vinho/5 text-vinho font-bold' : 'hover:bg-rosa/5 text-cinza'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span>{item.name}</span>
-                                <span className="text-[10px] bg-creme px-1.5 py-0.5 rounded text-cinza">{item.category}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-cinza">{item.quantity} disp.</span>
+                    <AnimatePresence>
+                      {isProdutosDropdownOpen && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-rosa/30 rounded-2xl shadow-xl overflow-hidden z-20 max-h-48 overflow-y-auto"
+                        >
+                          {produtos.map(prod => {
+                            const isSelected = selectedProdutos.some(p => p.id === prod.id);
+                            return (
+                              <div 
+                                key={prod.id}
+                                onClick={() => handleToggleProduto(prod)}
+                                className={`px-4 py-3 cursor-pointer transition-colors flex items-center justify-between ${
+                                  isSelected ? 'bg-vinho/5 text-vinho font-bold' : 'hover:bg-rosa/5 text-cinza'
+                                }`}
+                              >
+                                <span>{prod.name}</span>
                                 {isSelected && <Check className="w-4 h-4 text-vinho" />}
                               </div>
-                            </div>
-                          );
-                        })}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-            )}
-
-
-            {adicionais.length > 0 && (
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Adicionais</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {adicionais.map(adc => {
-                    const isSelected = selectedAdicionais.some(a => a.id === adc.id);
-                    return (
-                      <div 
-                        key={adc.id}
-                        onClick={() => handleToggleAdicional(adc)}
-                        className={`flex items-center gap-3 p-3 rounded-2xl border-2 cursor-pointer transition-all ${
-                          isSelected ? 'border-vinho bg-vinho/5' : 'border-rosa/30 bg-white hover:border-rosa'
-                        }`}
-                      >
-                        <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-all shrink-0 ${
-                          isSelected ? 'bg-vinho border-vinho text-white' : 'border-rosa/50 bg-white'
-                        }`}>
-                          {isSelected && <Check className="w-3 h-3 font-bold" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-vinho truncate">{adc.name}</p>
-                          <p className="text-[10px] font-bold text-cinza">R$ {adc.price}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Alguma observação importante?</label>
-              <textarea 
-                className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all h-28 resize-none text-vinho font-medium placeholder:text-cinza/30 shadow-sm"
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                placeholder="Detalhes de cores, tecidos ou pedidos especiais da cliente..."
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5 flex-1">
-                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Para quando?</label>
-                <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa pointer-events-none transition-colors group-focus-within:text-vinho">
-                    <CalendarIcon className="w-4 h-4" />
+                            );
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <input 
-                    type="date" 
-                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm appearance-none"
-                    value={date}
-                    onChange={e => setDate(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5 flex-1">
-                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Valor do Bordado</label>
-                <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
-                    <CreditCard className="w-4 h-4" />
+                ) : (
+                  <div className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm text-cinza/50 shadow-sm flex items-center relative">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa/50">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    Nenhum produto cadastrado.
                   </div>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">BRL</div>
-                  <input 
-                    type="text" 
-                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-12 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
-                    value={value}
-                    onChange={e => setValue(e.target.value)}
-                    placeholder="0,00"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5 flex-1">
-                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Valor do Frete</label>
-                <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
-                    <Truck className="w-4 h-4" />
-                  </div>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">BRL</div>
-                  <input 
-                    type="text" 
-                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-12 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
-                    value={shippingValue}
-                    onChange={e => setShippingValue(e.target.value.replace(/[^0-9,.]/g, ''))}
-                    placeholder="0,00"
-                  />
-                </div>
-                <div className="flex items-center gap-2 mt-1.5 ml-1">
-                  <input 
-                    type="checkbox" 
-                    id="freeShippingAdd"
-                    checked={shippingValue === '0,00' || shippingValue === '0'}
-                    onChange={e => {
-                      if (e.target.checked) {
-                        setShippingValue('0,00');
-                      } else {
-                        setShippingValue('');
-                      }
-                    }}
-                    className="rounded text-vinho focus:ring-vinho cursor-pointer w-4 h-4"
-                  />
-                  <label htmlFor="freeShippingAdd" className="text-[10px] font-bold text-cinza uppercase cursor-pointer select-none">Envio Grátis</label>
-                </div>
-              </div>
-              <div className="space-y-1.5 flex-1">
-                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Estado de Envio</label>
-                <div className="relative group">
-                  <select 
-                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm appearance-none"
-                    value={shippingState}
-                    onChange={e => setShippingState(e.target.value)}
-                  >
-                    {ESTADOS_BR.map(st => (
-                      <option key={st.value} value={st.value}>{st.label}</option>
-                    ))}
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-rosa">
-                    ▼
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center px-1">
-                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider">Valor de Entrada (PIX)</label>
-                {entryPercentage > 0 && (
-                  <span className="text-[10px] font-black text-vinho bg-rosa/20 px-2 py-0.5 rounded-full">
-                    {entryPercentage}% do total
-                  </span>
                 )}
               </div>
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
-                  <TrendingUp className="w-4 h-4" />
+
+              {stockItems.length > 0 && (
+                <div className="space-y-1.5 relative z-10">
+                  <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Materiais do Estoque Utilizados</label>
+                  <div className="relative">
+                    <div 
+                      onClick={() => setIsStockDropdownOpen(!isStockDropdownOpen)}
+                      className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-10 py-4 text-sm outline-none focus:border-vinho transition-all text-vinho font-medium shadow-sm cursor-pointer min-h-[56px] flex items-center"
+                    >
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa">
+                        <Package className="w-4 h-4" />
+                      </div>
+                      {usedStockItems.length > 0 ? (
+                        <div className="flex flex-wrap gap-2 w-full pr-2">
+                          {usedStockItems.map(s => {
+                            const item = stockItems.find(i => i.id === s.stockItemId);
+                            if (!item) return null;
+                            return (
+                              <div key={s.stockItemId} className="bg-creme text-vinho px-2 py-1 rounded-lg text-xs font-bold border border-rosa/20 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                <span className="truncate max-w-[100px]">{item.name}</span>
+                                <div className="flex items-center gap-1 bg-white rounded border border-rosa/20 px-1">
+                                  <button type="button" onClick={() => updateStockItemQuantity(s.stockItemId, -1)} className="hover:text-vermelho">-</button>
+                                  <span className="text-[10px] w-4 text-center">{s.quantity}</span>
+                                  <button type="button" onClick={() => updateStockItemQuantity(s.stockItemId, 1)} className="hover:text-verde">+</button>
+                                </div>
+                                <X className="w-3 h-3 cursor-pointer hover:text-vermelho ml-1" onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleStockItem(item);
+                                }} />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-cinza/50">Selecione bastidores, caixas, etc...</span>
+                      )}
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 text-rosa pointer-events-none">
+                        <ChevronDown className={`w-4 h-4 transition-transform ${isStockDropdownOpen ? 'rotate-180' : ''}`} />
+                      </div>
+                    </div>
+
+                    <AnimatePresence>
+                      {isStockDropdownOpen && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-rosa/30 rounded-2xl shadow-xl overflow-hidden z-20 max-h-48 overflow-y-auto"
+                        >
+                          {stockItems.map(item => {
+                            const isSelected = usedStockItems.some(s => s.stockItemId === item.id);
+                            return (
+                              <div 
+                                key={item.id}
+                                onClick={() => handleToggleStockItem(item)}
+                                className={`px-4 py-3 cursor-pointer transition-colors flex items-center justify-between ${
+                                  isSelected ? 'bg-vinho/5 text-vinho font-bold' : 'hover:bg-rosa/5 text-cinza'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span>{item.name}</span>
+                                  <span className="text-[10px] bg-creme px-1.5 py-0.5 rounded text-cinza">{item.category}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-cinza">{item.quantity} disp.</span>
+                                  {isSelected && <Check className="w-4 h-4 text-vinho" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">OPCIONAL</div>
-                <input 
-                  type="text" 
-                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-20 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
-                  value={entryAmount}
-                  onChange={e => setEntryAmount(e.target.value)}
-                  placeholder="Quanto você já recebeu?"
+              )}
+
+              {adicionais.length > 0 && (
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Adicionais</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {adicionais.map(adc => {
+                      const isSelected = selectedAdicionais.some(a => a.id === adc.id);
+                      return (
+                        <div 
+                          key={adc.id}
+                          onClick={() => handleToggleAdicional(adc)}
+                          className={`flex items-center gap-3 p-3 rounded-2xl border-2 cursor-pointer transition-all ${
+                            isSelected ? 'border-vinho bg-vinho/5' : 'border-rosa/30 bg-white hover:border-rosa'
+                          }`}
+                        >
+                          <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-all shrink-0 ${
+                            isSelected ? 'bg-vinho border-vinho text-white' : 'border-rosa/50 bg-white'
+                          }`}>
+                            {isSelected && <Check className="w-3 h-3 font-bold" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-vinho truncate">{adc.name}</p>
+                            <p className="text-[10px] font-bold text-cinza">R$ {adc.price}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Alguma observação importante?</label>
+                <textarea 
+                  className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all h-28 resize-none text-vinho font-medium placeholder:text-cinza/30 shadow-sm"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Detalhes de cores, tecidos ou pedidos especiais da cliente..."
                 />
               </div>
             </div>
-          </div>
 
-          <div 
-            onClick={() => setIsPartnership(!isPartnership)}
-            className="flex items-center gap-3 p-4 bg-white/50 border-2 border-rosa/20 rounded-2xl cursor-pointer hover:bg-white transition-all group shadow-sm"
-          >
-            <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isPartnership ? 'bg-vinho border-vinho text-white' : 'border-rosa text-transparent group-hover:border-vinho'}`}>
-              <Check className="w-4 h-4" />
+            {/* Coluna da Direita */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5 flex-1">
+                  <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Para quando?</label>
+                  <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa pointer-events-none transition-colors group-focus-within:text-vinho">
+                      <CalendarIcon className="w-4 h-4" />
+                    </div>
+                    <input 
+                      type="date" 
+                      className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-4 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm appearance-none"
+                      value={date}
+                      onChange={e => setDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Valor do Bordado</label>
+                  <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">BRL</div>
+                    <input 
+                      type="text" 
+                      className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-12 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
+                      value={value}
+                      onChange={e => setValue(e.target.value)}
+                      placeholder="0,00"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5 flex-1">
+                  <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Valor do Frete</label>
+                  <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+                      <Truck className="w-4 h-4" />
+                    </div>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">BRL</div>
+                    <input 
+                      type="text" 
+                      className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-12 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
+                      value={shippingValue}
+                      onChange={e => setShippingValue(e.target.value.replace(/[^0-9,.]/g, ''))}
+                      placeholder="0,00"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5 ml-1">
+                    <input 
+                      type="checkbox" 
+                      id="freeShippingAdd"
+                      checked={shippingValue === '0,00' || shippingValue === '0'}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setShippingValue('0,00');
+                        } else {
+                          setShippingValue('');
+                        }
+                      }}
+                      className="rounded text-vinho focus:ring-vinho cursor-pointer w-4 h-4"
+                    />
+                    <label htmlFor="freeShippingAdd" className="text-[10px] font-bold text-cinza uppercase cursor-pointer select-none">Envio Grátis</label>
+                  </div>
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <label className="block text-[10px] font-black text-cinza uppercase tracking-wider ml-1">Estado de Envio</label>
+                  <div className="relative group">
+                    <select 
+                      className="w-full bg-white border-2 border-rosa/30 rounded-2xl px-5 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm appearance-none"
+                      value={shippingState}
+                      onChange={e => setShippingState(e.target.value)}
+                    >
+                      {ESTADOS_BR.map(st => (
+                        <option key={st.value} value={st.value}>{st.label}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-rosa">
+                      ▼
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center px-1">
+                  <label className="block text-[10px] font-black text-cinza uppercase tracking-wider">Valor de Entrada (PIX)</label>
+                  {entryPercentage > 0 && (
+                    <span className="text-[10px] font-black text-vinho bg-rosa/20 px-2 py-0.5 rounded-full">
+                      {entryPercentage}% do total
+                    </span>
+                  )}
+                </div>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-rosa transition-colors group-focus-within:text-vinho">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-rosa">OPCIONAL</div>
+                  <input 
+                    type="text" 
+                    className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-20 py-4 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium shadow-sm"
+                    value={entryAmount}
+                    onChange={e => setEntryAmount(e.target.value)}
+                    placeholder="Quanto você já recebeu?"
+                  />
+                </div>
+              </div>
+
+              <div 
+                onClick={() => setIsPartnership(!isPartnership)}
+                className="flex items-center gap-3 p-4 bg-white/50 border-2 border-rosa/20 rounded-2xl cursor-pointer hover:bg-white transition-all group shadow-sm"
+              >
+                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isPartnership ? 'bg-vinho border-vinho text-white' : 'border-rosa text-transparent group-hover:border-vinho'}`}>
+                  <Check className="w-4 h-4" />
+                </div>
+                <span className="text-sm font-bold text-vinho/70 group-hover:text-vinho transition-colors">Este pedido é uma parceria / collab?</span>
+              </div>
             </div>
-            <span className="text-sm font-bold text-vinho/70 group-hover:text-vinho transition-colors">Este pedido é uma parceria / collab?</span>
+
           </div>
 
           <div className="flex gap-4 pt-4 pb-2">
