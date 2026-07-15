@@ -49,11 +49,11 @@ serve(async (req) => {
     }
 
     // Determina o valor do plano
-    let value = 19.90;
+    let value = 24.90;
     if (planTier === "basic") {
-      value = planInterval === "year" ? 199.00 : 19.90;
+      value = planInterval === "year" ? 289.90 : 24.90;
     } else if (planTier === "premium") {
-      value = planInterval === "year" ? 349.00 : 34.90;
+      value = planInterval === "year" ? 529.90 : 44.90;
     }
 
     // Inicializa cliente Supabase de backend com a Service Role Key

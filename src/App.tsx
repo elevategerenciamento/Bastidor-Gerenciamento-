@@ -1562,7 +1562,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-20 lg:flex lg:pb-0">
       <AnimatePresence>
         {isSidebarOpen && (
           <>
@@ -1711,7 +1711,137 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <header className="bg-vinho text-creme px-6 py-6 md:py-10 text-center relative overflow-hidden">
+      {/* ─────────────── SIDEBAR PERMANENTE DESKTOP ─────────────── */}
+      <aside className="hidden lg:flex flex-col w-64 fixed inset-y-0 left-0 bg-creme border-r-2 border-rosa/30 shadow-xl z-50">
+        {/* Header da Sidebar */}
+        <div className="px-5 py-6 bg-vinho text-creme shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="bg-rosa p-2 rounded-xl shrink-0">
+              <HoopLogo className="w-7 h-7 text-vinho" />
+            </div>
+            <div>
+              <h2 className="text-lg font-serif font-black lowercase tracking-tighter leading-none">bastidor</h2>
+              <p className="text-[9px] text-rosa/70 uppercase font-bold tracking-[0.12em] mt-0.5">sistema de gestão</p>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <p className="text-[9px] text-rosa/50 uppercase tracking-widest font-bold mb-1">Olá,</p>
+            <p className="text-sm font-bold text-creme truncate">{user?.user_metadata?.full_name || user?.email?.split('@')[0]}</p>
+            {subscription && subscription.status === 'active' && (
+              <span className="inline-flex items-center mt-2 text-[9px] bg-dourado text-white font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
+                ✦ {subscription.plan_tier === 'premium' ? 'Premium' : 'Básico'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Navegação */}
+        <nav className="flex-1 py-3 px-2 overflow-y-auto">
+          <p className="text-[9px] text-cinza/40 uppercase tracking-widest font-bold px-3 py-2 mt-1">Módulos</p>
+
+          <button
+            onClick={() => {
+              const isFree = !subscription || subscription.status !== 'active';
+              if (isFree) { alert("O controle de estoque físico é exclusivo para assinantes! Escolha um plano para ativar."); setIsSubscriptionModalOpen(true); }
+              else { setIsStockModalOpen(true); }
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-vinho hover:bg-vinho/6 transition-all text-sm font-semibold group mb-0.5"
+          >
+            <Package className="w-4 h-4 shrink-0 text-vinho/50 group-hover:text-vinho/80 transition-colors" />
+            <span className="flex-1 text-left">Estoque Físico</span>
+            {(!subscription || subscription.status !== 'active') && (
+              <span className="text-[8px] bg-dourado/70 text-white font-black px-1.5 py-0.5 rounded-full uppercase">PRO</span>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              const isFree = !subscription || subscription.status !== 'active';
+              if (isFree) { alert("O controle de compras é exclusivo para assinantes! Escolha um plano para ativar."); setIsSubscriptionModalOpen(true); }
+              else { setIsInventoryOpen(true); }
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-vinho hover:bg-vinho/6 transition-all text-sm font-semibold group mb-0.5"
+          >
+            <TrendingUp className="w-4 h-4 shrink-0 text-vinho/50 group-hover:text-vinho/80 transition-colors" />
+            <span className="flex-1 text-left">Compras &amp; Gastos</span>
+            {(!subscription || subscription.status !== 'active') && (
+              <span className="text-[8px] bg-dourado/70 text-white font-black px-1.5 py-0.5 rounded-full uppercase">PRO</span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setIsAdicionaisOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-vinho hover:bg-vinho/6 transition-all text-sm font-semibold group mb-0.5"
+          >
+            <Tag className="w-4 h-4 shrink-0 text-vinho/50 group-hover:text-vinho/80 transition-colors" />
+            <span>Adicionais (Extras)</span>
+          </button>
+
+          <button
+            onClick={() => setIsProdutosOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-vinho hover:bg-vinho/6 transition-all text-sm font-semibold group mb-0.5"
+          >
+            <PackageSearch className="w-4 h-4 shrink-0 text-vinho/50 group-hover:text-vinho/80 transition-colors" />
+            <span>Meus Produtos</span>
+          </button>
+
+          <button
+            onClick={() => setIsShippingOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-vinho hover:bg-vinho/6 transition-all text-sm font-semibold group mb-0.5"
+          >
+            <Truck className="w-4 h-4 shrink-0 text-vinho/50 group-hover:text-vinho/80 transition-colors" />
+            <span>Fretes &amp; Envios</span>
+          </button>
+
+          <div className="my-3 mx-2 border-t border-rosa/20" />
+          <p className="text-[9px] text-cinza/40 uppercase tracking-widest font-bold px-3 py-2">Conta</p>
+
+          <button
+            onClick={() => setIsSubscriptionModalOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-vinho hover:bg-vinho/6 transition-all text-sm font-semibold group mb-0.5"
+          >
+            <CreditCard className="w-4 h-4 shrink-0 text-vinho/50 group-hover:text-vinho/80 transition-colors" />
+            <span className="flex-1 text-left">Minha Assinatura</span>
+            {subscription && subscription.status === 'active' && (
+              <span className="text-[8px] bg-dourado text-white font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter">
+                {subscription.plan_tier === 'premium' ? 'PRO' : 'Básico'}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-vinho hover:bg-vinho/6 transition-all text-sm font-semibold group mb-0.5"
+          >
+            <Settings className="w-4 h-4 shrink-0 text-vinho/50 group-hover:text-vinho/80 transition-colors" />
+            <span>Configurações</span>
+          </button>
+
+          <button
+            onClick={() => setIsSecurityOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-verde/80 hover:bg-verde/5 transition-all text-sm font-semibold group mb-0.5"
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0 text-verde/50 group-hover:text-verde/70 transition-colors" />
+            <span>Segurança e Privacidade</span>
+          </button>
+        </nav>
+
+        {/* Footer - Logout */}
+        <div className="px-2 pb-4 pt-2 border-t border-rosa/30 shrink-0">
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-vermelho hover:bg-vermelho/5 transition-all text-sm font-black group"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span>Sair da Conta</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ─────────────── WRAPPER CONTEÚDO PRINCIPAL ─────────────── */}
+      <div className="lg:ml-64 flex-1 flex flex-col min-h-screen overflow-x-hidden">
+
+      <header className="bg-vinho text-creme px-6 py-6 md:py-10 text-center relative overflow-hidden lg:hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
           <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] border-[40px] border-rosa rounded-full rotate-45" />
         </div>
@@ -1736,6 +1866,41 @@ export default function App() {
           <p className="text-[10px] text-rosa tracking-[3px] uppercase font-bold">seu ateliê organizado • olá, {user?.user_metadata?.full_name || user?.email?.split('@')[0]}</p>
         </motion.div>
       </header>
+
+      {/* ─── TOPBAR DESKTOP ─── */}
+      <div className="hidden lg:flex items-center justify-between bg-vinho text-creme px-8 py-3.5 shrink-0 border-b border-white/10">
+        <div className="flex items-center gap-3">
+          <HoopLogo className="w-5 h-5 text-rosa" />
+          <span className="text-base font-serif font-black lowercase tracking-tighter">bastidor</span>
+          <span className="text-white/20 text-lg leading-none mx-0.5">•</span>
+          <span className="text-xs font-medium text-creme/50">Painel do Ateliê</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {isOnTrial && !hasActiveSubscription && (
+            <button
+              onClick={() => setIsSubscriptionModalOpen(true)}
+              className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full transition-all hover:opacity-90"
+              style={{
+                background: (trialDaysRemaining !== null && trialDaysRemaining <= 3) ? 'rgba(192,57,43,0.4)' : 'rgba(201,168,76,0.4)',
+                color: 'white'
+              }}
+            >
+              <Clock className="w-3 h-3 shrink-0" />
+              {trialDaysRemaining !== null && trialDaysRemaining <= 3
+                ? `⚠ Apenas ${trialDaysRemaining}d restantes — assine já`
+                : `Teste grátis: ${trialDaysRemaining} dias restantes`}
+            </button>
+          )}
+          {subscription && subscription.status === 'active' && (
+            <span className="text-[10px] bg-dourado/80 text-white font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
+              ✦ {subscription.plan_tier === 'premium' ? 'Premium' : 'Básico'}
+            </span>
+          )}
+          <div className="text-xs font-medium text-creme/60 bg-white/10 px-3 py-1.5 rounded-lg border border-white/10">
+            {TODAY.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+          </div>
+        </div>
+      </div>
 
       {subscriptionMessage && (
         <div className="bg-verde text-creme text-center py-3.5 px-6 text-xs font-black uppercase tracking-wider flex justify-between items-center shadow-md animate-in fade-in slide-in-from-top-2 duration-300">
@@ -1772,11 +1937,18 @@ export default function App() {
         </div>
       )}
 
-      <div className="bg-dourado text-white text-center py-2 text-xs font-medium tracking-wider">
+      <div className="bg-dourado text-white text-center py-2 text-xs font-medium tracking-wider lg:hidden">
         hoje: {TODAY.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
       </div>
 
-      <main className="max-w-2xl mx-auto px-4 mt-6 space-y-8">
+      <main className="max-w-2xl mx-auto px-4 mt-6 space-y-8 lg:max-w-none lg:px-8 lg:mt-0 lg:flex-1 lg:py-8 lg:space-y-0">
+
+        {/* ── LAYOUT 2 COLUNAS (desktop) ── */}
+        <div className="space-y-8 lg:flex lg:gap-8 lg:items-start lg:space-y-0">
+
+        {/* Coluna Esquerda — Financeiro, Stats, Relatórios */}
+        <div className="space-y-8 lg:flex-1 lg:min-w-0">
+
         {/* Finance Section */}
         <section className="space-y-4">
           <div className="flex items-center justify-between border-b border-rosa pb-2">
@@ -2039,6 +2211,11 @@ export default function App() {
           </div>
         </section>
 
+        </div>{/* fim coluna esquerda */}
+
+        {/* Coluna Direita — Calendário + Alertas Urgentes */}
+        <div className="space-y-6 lg:w-80 lg:shrink-0 lg:sticky lg:top-6 lg:self-start">
+
         {/* Calendar Section */}
         <section className="space-y-4">
           <div className="flex items-center justify-between border-b border-rosa pb-2">
@@ -2179,8 +2356,12 @@ export default function App() {
           })()}
         </AnimatePresence>
 
-        {/* Orders List */}
-        <section id="orders-list" className="space-y-4">
+        </div>{/* fim coluna direita */}
+
+        </div>{/* fim grid 2 colunas */}
+
+        {/* ── LISTA DE PEDIDOS — largura total ── */}
+        <section id="orders-list" className="space-y-4 lg:mt-8">
           <div className="flex items-center justify-between border-b border-rosa pb-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-vinho" />
@@ -2267,6 +2448,7 @@ export default function App() {
           </div>
         </section>
       </main>
+      </div>{/* fim wrapper lg:ml-64 */}
 
       <AnimatePresence>
         {isAddingOrder && (
