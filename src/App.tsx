@@ -2814,21 +2814,11 @@ function DayDetailsModal({
 
 function HoopLogo({ className = "w-24 h-24" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="50" cy="50" r="41" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2 2" />
-      <line x1="35" y1="65" x2="65" y2="35" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="63" cy="37" r="1" fill="currentColor" />
-      <path 
-        d="M63 37 C 75 25, 85 45, 65 55 C 45 65, 35 45, 50 35" 
-        stroke="currentColor" 
-        strokeWidth="0.8" 
-        strokeLinecap="round" 
-        fill="none"
-        className="opacity-40"
-      />
-      <rect x="42" y="2" width="16" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
+    <img 
+      src="/logo.png" 
+      alt="Logo Bastidor" 
+      className={`object-cover rounded-xl shadow-sm ${className.replace(/text-[a-zA-Z0-9-]+/g, '')}`} 
+    />
   );
 }
 
