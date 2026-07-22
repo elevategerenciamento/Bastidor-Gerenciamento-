@@ -368,6 +368,20 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
 
+  useEffect(() => {
+    const isAnyModalOpen = isAddingOrder || isDayDetailsOpen || isFinanceDetailsOpen || isInventoryOpen || isStockModalOpen || isAdicionaisOpen || isProdutosOpen || isShippingOpen || isSettingsOpen || isSecurityOpen || isSubscriptionModalOpen;
+    
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isAddingOrder, isDayDetailsOpen, isFinanceDetailsOpen, isInventoryOpen, isStockModalOpen, isAdicionaisOpen, isProdutosOpen, isShippingOpen, isSettingsOpen, isSecurityOpen, isSubscriptionModalOpen]);
+
   const reportMonths = useMemo(() => {
     const cur = TODAY.getMonth();
     const yr = TODAY.getFullYear();
@@ -1582,8 +1596,8 @@ export default function App() {
             >
               <div className="p-8 bg-vinho text-creme">
                 <div className="flex items-center gap-3">
-                  <div className="bg-rosa p-2 rounded-xl">
-                    <HoopLogo className="w-8 h-8 text-vinho" />
+                  <div className="shrink-0">
+                    <HoopLogo className="w-16 h-16" />
                   </div>
                   <div>
                     <h3 className="text-xl font-serif font-black lowercase tracking-tighter">bastidor</h3>
@@ -1716,8 +1730,8 @@ export default function App() {
         {/* Header da Sidebar */}
         <div className="px-5 py-6 bg-vinho text-creme shrink-0">
           <div className="flex items-center gap-3">
-            <div className="bg-rosa p-2 rounded-xl shrink-0">
-              <HoopLogo className="w-7 h-7 text-vinho" />
+            <div className="shrink-0">
+              <HoopLogo className="w-16 h-16" />
             </div>
             <div>
               <h2 className="text-lg font-serif font-black lowercase tracking-tighter leading-none">bastidor</h2>
@@ -1860,7 +1874,7 @@ export default function App() {
           className="relative z-10 flex flex-col items-center"
         >
           <div className="text-rosa mb-2 md:mb-4">
-            <HoopLogo className="w-12 h-12 md:w-16 md:h-16" />
+            <HoopLogo className="w-20 h-20 md:w-24 md:h-24" />
           </div>
           <h1 className="text-3xl md:text-4xl font-serif font-black mb-1 lowercase tracking-tighter">bastidor</h1>
           <p className="text-[10px] text-rosa tracking-[3px] uppercase font-bold">seu ateliê organizado • olá, {user?.user_metadata?.full_name || user?.email?.split('@')[0]}</p>
@@ -1870,7 +1884,7 @@ export default function App() {
       {/* ─── TOPBAR DESKTOP ─── */}
       <div className="hidden lg:flex items-center justify-between bg-vinho text-creme px-8 py-3.5 shrink-0 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <HoopLogo className="w-5 h-5 text-rosa" />
+          <HoopLogo className="w-8 h-8" />
           <span className="text-base font-serif font-black lowercase tracking-tighter">bastidor</span>
           <span className="text-white/20 text-lg leading-none mx-0.5">•</span>
           <span className="text-xs font-medium text-creme/50">Painel do Ateliê</span>
@@ -3320,6 +3334,9 @@ function AddOrderModal({
         {/* Header decorativo */}
         <div className="bg-vinho p-8 text-creme relative overflow-hidden">
           <div className="absolute top-[-10%] right-[-10%] w-32 h-32 border-[10px] border-rosa/10 rounded-full" />
+          <button type="button" onClick={onClose} className="absolute top-6 right-6 p-2 hover:bg-white/10 rounded-full z-20 transition-colors">
+            <X className="w-6 h-6 text-creme" />
+          </button>
           <div className="relative z-10 flex items-center gap-4">
             <div className="bg-rosa/20 p-3 rounded-2xl backdrop-blur-sm">
               {orderToEdit ? <Edit className="w-8 h-8 text-rosa" /> : <Plus className="w-8 h-8 text-rosa" />}
@@ -3333,7 +3350,7 @@ function AddOrderModal({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6 max-h-[75vh] overflow-y-auto">
           {/* Layout Responsivo: 1 coluna no mobile, 2 colunas lado a lado no Desktop */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
@@ -4241,12 +4258,12 @@ function AddInventoryModal({
         <div className="bg-vinho p-8 text-white relative">
           <h3 className="text-3xl font-serif font-black tracking-tight">{itemToEdit ? 'Editar Insumo' : 'Novo Insumo'}</h3>
           <p className="text-rosa/60 text-[10px] uppercase tracking-widest font-bold mt-1">{itemToEdit ? 'Atualize as informações da compra' : 'O que você comprou para o ateliê?'}</p>
-          <button onClick={onClose} className="absolute top-8 right-8 p-1 hover:bg-white/10 rounded-full">
-            <X className="w-6 h-6 text-rosa" />
+          <button type="button" onClick={onClose} className="absolute top-6 right-6 p-2 hover:bg-white/10 rounded-full z-20 transition-colors">
+            <X className="w-6 h-6 text-creme" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-5">
+        <form onSubmit={handleSubmit} className="p-8 space-y-5 max-h-[75vh] overflow-y-auto">
           <div className="space-y-4">
             <div className="space-y-1">
               <label className="block text-[10px] font-black text-cinza uppercase ml-1">Descrição</label>
