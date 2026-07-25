@@ -3321,18 +3321,18 @@ function AddOrderModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-vinho/60 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 bg-vinho/60 backdrop-blur-md z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
       onClick={onClose}
     >
       <motion.div 
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className="bg-creme max-w-lg md:max-w-4xl w-full rounded-[40px] shadow-2xl border-2 border-rosa overflow-hidden"
+        className="bg-creme max-w-lg md:max-w-4xl w-full rounded-[40px] shadow-2xl border-2 border-rosa flex flex-col my-auto"
         onClick={e => e.stopPropagation()}
       >
         {/* Header decorativo */}
-        <div className="bg-vinho p-8 text-creme relative overflow-hidden">
+        <div className="bg-vinho p-8 text-creme relative overflow-hidden rounded-t-[40px] shrink-0">
           <div className="absolute top-[-10%] right-[-10%] w-32 h-32 border-[10px] border-rosa/10 rounded-full" />
           <button type="button" onClick={onClose} className="absolute top-6 right-6 p-2 hover:bg-white/10 rounded-full z-20 transition-colors">
             <X className="w-6 h-6 text-creme" />
@@ -3350,7 +3350,7 @@ function AddOrderModal({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6 max-h-[75vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
           {/* Layout Responsivo: 1 coluna no mobile, 2 colunas lado a lado no Desktop */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
