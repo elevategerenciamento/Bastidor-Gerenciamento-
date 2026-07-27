@@ -509,8 +509,10 @@ export default function App() {
     let result = [...orders];
 
     if (searchTerm.trim() !== '') {
+      const search = searchTerm.toLowerCase();
       result = result.filter(o => 
-        o.customerName.toLowerCase().includes(searchTerm.toLowerCase())
+        o.customerName.toLowerCase().includes(search) ||
+        o.pieceDescription.toLowerCase().includes(search)
       );
     }
 
@@ -2409,7 +2411,7 @@ export default function App() {
               className="w-full bg-white border-2 border-rosa/30 rounded-2xl pl-11 pr-10 py-3 text-sm outline-none focus:border-vinho focus:ring-4 focus:ring-vinho/5 transition-all text-vinho font-medium placeholder:text-cinza/30 shadow-sm"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Pesquisar cliente por nome..."
+              placeholder="Pesquisar por cliente ou tipo de trabalho..."
             />
           </div>
 
